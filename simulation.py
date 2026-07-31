@@ -11,7 +11,7 @@ from navigation import (
 )
 from obstacle import Obstacle
 from vessel import Vessel
-
+from mission_metrics import MissionMetrics
 
 class Simulation:
     def __init__(self) -> None:
@@ -27,6 +27,14 @@ class Simulation:
 
         self.arrived = False
         self.collided = False
+        self.metrics = MissionMetrics(
+            base_fuel_burn_rate_lph=(
+                config.BASE_FUEL_BURN_RATE_LPH
+            ),
+            speed_cubed_coefficient=(
+                config.SPEED_CUBED_COEFFICIENT
+            ),
+        )
 
         self.obstacles = [
             Obstacle(
@@ -123,7 +131,24 @@ class Simulation:
             dt_s,
         )
 
+        previous_x_m = self.vessel.x_m
+        previous_y_m = self.vessel.y_m
+        movement_speed_mps = self.vessel.speed_mps
+
         self.vessel.update(dt_s)
+
+        distance_traveled_m = calculate_distance(
+            previous_x_m,
+            previous_y_m,
+            self.vessel.x_m,
+            self.vessel.y_m,
+        )
+
+        self.metrics.update(
+            distance_traveled_m=distance_traveled_m,
+            speed_mps=movement_speed_mps,
+            dt_s=dt_s,
+        )
 
         last_x_m, last_y_m = self.trail_points[-1]
 

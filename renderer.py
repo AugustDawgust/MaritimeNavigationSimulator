@@ -6,6 +6,10 @@ import config
 from vessel import Vessel
 
 from obstacle import Obstacle
+from mission_metrics import (
+    MissionMetrics,
+    calculate_fuel_burn_rate_lph,
+)
 
 class Renderer:
     def __init__(self, screen: pygame.Surface) -> None:
@@ -26,6 +30,7 @@ class Renderer:
             distance_to_destination_m: float,
             obstacles: list[Obstacle],
             avoidance_waypoint: tuple[float, float] | None,
+            metrics: MissionMetrics,
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
 
@@ -46,6 +51,7 @@ class Renderer:
             arrived,
             collided,
             avoidance_waypoint,
+            metrics,
         )
 
         pygame.display.flip()
@@ -57,6 +63,7 @@ class Renderer:
             arrived: bool,
             collided: bool,
             avoidance_waypoint: tuple[float, float] | None,
+            metrics: MissionMetrics,
     ) -> None:
         panel_rect = pygame.Rect(
             config.STATUS_PANEL_X_PX,
@@ -85,6 +92,14 @@ class Renderer:
             status_text = "NAVIGATING"
             status_color = config.STATUS_TEXT_COLOR
 
+        current_fuel_burn_rate_lph = (
+            calculate_fuel_burn_rate_lph(
+                vessel.speed_mps,
+                metrics.base_fuel_burn_rate_lph,
+                metrics.speed_cubed_coefficient,
+            )
+        )
+
         lines = [
             (f"Status: {status_text}", status_color),
             (
@@ -97,6 +112,22 @@ class Renderer:
             ),
             (
                 f"Distance: {distance_to_destination_m:.1f} m",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Elapsed: {metrics.elapsed_time_s:.1f} s",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Route: {metrics.distance_traveled_m:.1f} m",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Fuel used: {metrics.fuel_used_l:.3f} L",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Fuel rate: {current_fuel_burn_rate_lph:.1f} L/h",
                 config.STATUS_TEXT_COLOR,
             ),
         ]
@@ -117,7 +148,7 @@ class Renderer:
                 color,
             )
             self.screen.blit(text_surface, (text_x, text_y))
-            text_y += 28
+            text_y += 26
 
     def _draw_vessel(self, vessel: Vessel) -> None:
         heading_rad = math.radians(vessel.heading_deg)

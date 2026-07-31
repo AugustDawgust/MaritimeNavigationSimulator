@@ -2,6 +2,7 @@ import unittest
 
 from obstacle import Obstacle
 from simulation import Simulation
+from navigation import calculate_distance
 import config
 
 
@@ -151,6 +152,137 @@ class TestSimulation(unittest.TestCase):
         self.assertIsNone(simulation.avoidance_waypoint)
         self.assertGreater(simulation.vessel.x_m, 0.0)
         self.assertAlmostEqual(simulation.vessel.y_m, 0.0)
+
+    def test_tracks_metrics_during_vessel_movement(self) -> None:
+        simulation = Simulation()
+        simulation.obstacles = []
+
+        initial_x_m = simulation.vessel.x_m
+        initial_y_m = simulation.vessel.y_m
+        initial_speed_mps = simulation.vessel.speed_mps
+
+        simulation.update(1.0)
+
+        expected_distance_m = calculate_distance(
+            initial_x_m,
+            initial_y_m,
+            simulation.vessel.x_m,
+            simulation.vessel.y_m,
+        )
+        expected_burn_rate_lph = (
+            config.BASE_FUEL_BURN_RATE_LPH
+            + config.SPEED_CUBED_COEFFICIENT
+            * initial_speed_mps**3
+        )
+
+        self.assertAlmostEqual(
+            simulation.metrics.elapsed_time_s,
+            1.0,
+        )
+        self.assertAlmostEqual(
+            simulation.metrics.distance_traveled_m,
+            expected_distance_m,
+        )
+        self.assertAlmostEqual(
+            simulation.metrics.fuel_used_l,
+            expected_burn_rate_lph / 3600.0,
+        )
+
+    def test_metrics_do_not_change_after_arrival(self) -> None:
+        simulation = Simulation()
+        simulation.arrived = True
+        simulation.vessel.speed_mps = 0.0
+
+        simulation.update(10.0)
+
+        self.assertEqual(
+            simulation.metrics.elapsed_time_s,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.distance_traveled_m,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.fuel_used_l,
+            0.0,
+        )
+
+    def test_metrics_do_not_change_after_collision(self) -> None:
+        simulation = Simulation()
+        simulation.collided = True
+        simulation.vessel.speed_mps = 0.0
+
+        simulation.update(10.0)
+
+        self.assertEqual(
+            simulation.metrics.elapsed_time_s,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.distance_traveled_m,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.fuel_used_l,
+            0.0,
+        )
+    def test_completed_mission_metrics_are_consistent(
+        self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 90.0
+        simulation.destination_x_m = 100.0
+        simulation.destination_y_m = 0.0
+        simulation.obstacles = [
+            Obstacle(
+                x_m=50.0,
+                y_m=0.0,
+                radius_m=5.0,
+            )
+        ]
+        simulation.avoidance_waypoint = None
+        simulation.trail_points = [(0.0, 0.0)]
+
+        movement_speed_mps = simulation.vessel.speed_mps
+
+        for _ in range(2000):
+            simulation.update(0.05)
+
+            if simulation.arrived or simulation.collided:
+                break
+
+        expected_fuel_burn_rate_lph = (
+            config.BASE_FUEL_BURN_RATE_LPH
+            + config.SPEED_CUBED_COEFFICIENT
+            * movement_speed_mps**3
+        )
+        expected_fuel_used_l = (
+            expected_fuel_burn_rate_lph
+            * simulation.metrics.elapsed_time_s
+            / 3600.0
+        )
+        expected_route_distance_m = (
+            movement_speed_mps
+            * simulation.metrics.elapsed_time_s
+        )
+
+        self.assertTrue(simulation.arrived)
+        self.assertFalse(simulation.collided)
+        self.assertGreater(
+            simulation.metrics.elapsed_time_s,
+            0.0,
+        )
+        self.assertAlmostEqual(
+            simulation.metrics.distance_traveled_m,
+            expected_route_distance_m,
+        )
+        self.assertAlmostEqual(
+            simulation.metrics.fuel_used_l,
+            expected_fuel_used_l,
+        )
 
 if __name__ == "__main__":
     unittest.main()
