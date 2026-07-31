@@ -4,16 +4,20 @@ A Python engineering simulation of an autonomous surface vessel navigating throu
 
 The project is being developed incrementally to demonstrate vessel motion, waypoint navigation, collision avoidance, and simplified maneuverability.
 
-## Current Version: 0.1
+## Current Version: 0.2
 
-Version 0.1 includes:
+Version 0.2 includes:
 
-- Continuous vessel motion
-- Position and speed measured in real-world units
+- Continuous vessel motion in real-world units
 - Maritime heading convention
 - Frame-rate-independent simulation updates
-- Pygame visualization
-- Automated motion-model tests
+- Destination-based autonomous navigation
+- Shortest-direction heading control
+- Realistic maximum turn-rate limiting
+- Arrival detection and automatic stopping
+- Destination and route-trail visualization
+- Live heading, speed, distance, and navigation status
+- Automated motion and navigation tests
 
 ## Requirements
 
@@ -43,16 +47,18 @@ python -m unittest discover -s tests
 ## Project Structure
 
 - `main.py` — application entry point and main loop
-- `simulation.py` — simulation state and time advancement
+- `simulation.py` — simulation state, navigation integration, and time advancement
 - `vessel.py` — vessel state and motion model
-- `renderer.py` — conversion of simulation data into graphics
+- `navigation.py` — heading, turning, and distance calculations
+- `renderer.py` — simulation visualization and status display
 - `config.py` — shared simulation and display settings
-- `tests/` — automated tests
+- `tests/` — automated motion and navigation tests
 - `assets/` — future visual resources
 - `ENGINEERING_NOTES.md` — modeling decisions, assumptions, and limitations
 
-## Planned Development
+## Development Roadmap
 
+- Version 0.1: continuous vessel motion
 - Version 0.2: destination navigation and smooth turning
 - Version 0.3: static obstacles and collision detection
 - Version 0.4: autonomous obstacle avoidance
