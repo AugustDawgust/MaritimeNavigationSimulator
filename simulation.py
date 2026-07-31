@@ -24,10 +24,11 @@ class Simulation:
 
         self.obstacles = [
             Obstacle(
-                x_m=config.OBSTACLE_X_M,
-                y_m=config.OBSTACLE_Y_M,
-                radius_m=config.OBSTACLE_RADIUS_M,
+                x_m=x_m,
+                y_m=y_m,
+                radius_m=radius_m,
             )
+            for x_m, y_m, radius_m in config.OBSTACLES
         ]
 
         self.trail_points = [
