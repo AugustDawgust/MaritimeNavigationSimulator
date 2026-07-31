@@ -16,8 +16,11 @@ class Renderer:
             destination_x_m: float,
             destination_y_m: float,
             arrived: bool,
+            trail_points: list[tuple[float, float]],
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
+
+        self._draw_trail(trail_points)
 
         self._draw_destination(
             destination_x_m,
@@ -67,6 +70,25 @@ class Renderer:
             self.screen,
             config.VESSEL_COLOR,
             screen_points,
+        )
+    def _draw_trail(
+        self,
+        trail_points: list[tuple[float, float]],
+    ) -> None:
+        if len(trail_points) < 2:
+            return
+
+        screen_points = [
+            self._world_to_screen(x_m, y_m)
+            for x_m, y_m in trail_points
+        ]
+
+        pygame.draw.lines(
+            self.screen,
+            config.TRAIL_COLOR,
+            False,
+            screen_points,
+            config.TRAIL_WIDTH_PX,
         )
     def _draw_destination(
         self,

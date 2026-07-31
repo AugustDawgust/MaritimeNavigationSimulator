@@ -20,6 +20,10 @@ class Simulation:
         self.destination_y_m = config.DESTINATION_Y_M
         self.arrived = False
 
+        self.trail_points = [
+            (self.vessel.x_m, self.vessel.y_m)
+        ]
+
     def update(self, dt_s: float) -> None:
         distance_to_destination = calculate_distance(
             self.vessel.x_m,
@@ -48,3 +52,16 @@ class Simulation:
         )
 
         self.vessel.update(dt_s)
+        last_x_m, last_y_m = self.trail_points[-1]
+
+        distance_from_last_point = calculate_distance(
+            last_x_m,
+            last_y_m,
+            self.vessel.x_m,
+            self.vessel.y_m,
+        )
+
+        if distance_from_last_point >= config.TRAIL_POINT_SPACING_M:
+            self.trail_points.append(
+                (self.vessel.x_m, self.vessel.y_m)
+            )
