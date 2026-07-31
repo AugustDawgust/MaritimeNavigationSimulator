@@ -1,0 +1,17 @@
+# Virtual environment
+.venv/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# PyCharm project settings
+.idea/
+
+# macOS-generated files
+.DS_Store
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
