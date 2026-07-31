@@ -27,7 +27,12 @@ def main() -> None:
 
         simulation.update(dt_s)
 
-        renderer.render(simulation.vessel)
+        renderer.render(
+            simulation.vessel,
+            simulation.destination_x_m,
+            simulation.destination_y_m,
+            simulation.arrived,
+        )
 
     pygame.quit()
 

@@ -10,9 +10,22 @@ class Renderer:
     def __init__(self, screen: pygame.Surface) -> None:
         self.screen = screen
 
-    def render(self, vessel: Vessel) -> None:
+    def render(
+            self,
+            vessel: Vessel,
+            destination_x_m: float,
+            destination_y_m: float,
+            arrived: bool,
+    ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
+
+        self._draw_destination(
+            destination_x_m,
+            destination_y_m,
+            arrived,
+        )
         self._draw_vessel(vessel)
+
         pygame.display.flip()
 
     def _draw_vessel(self, vessel: Vessel) -> None:
@@ -55,6 +68,31 @@ class Renderer:
             config.VESSEL_COLOR,
             screen_points,
         )
+    def _draw_destination(
+        self,
+        destination_x_m: float,
+        destination_y_m: float,
+        arrived: bool,
+    ) -> None:
+        screen_position = self._world_to_screen(
+            destination_x_m,
+            destination_y_m,
+        )
+
+        color = (
+            config.DESTINATION_REACHED_COLOR
+            if arrived
+            else config.DESTINATION_COLOR
+        )
+
+        pygame.draw.circle(
+            self.screen,
+            color,
+            screen_position,
+            config.DESTINATION_RADIUS_PX,
+            config.DESTINATION_LINE_WIDTH_PX,
+        )
+
 
     @staticmethod
     def _world_to_screen(x_m: float, y_m: float) -> tuple[float, float]:
