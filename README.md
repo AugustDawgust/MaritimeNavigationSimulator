@@ -4,9 +4,9 @@ A Python engineering simulation of an autonomous surface vessel navigating throu
 
 The project is being developed incrementally to demonstrate vessel motion, waypoint navigation, collision avoidance, and simplified maneuverability.
 
-## Current Version: 0.3
+## Current Version: 0.4
 
-Version 0.3 includes:
+Version 0.4 includes:
 
 - Continuous vessel motion in real-world units
 - Maritime heading convention
@@ -22,6 +22,12 @@ Version 0.3 includes:
 - Destination, obstacle, and route-trail visualization
 - Live heading, speed, distance, and navigation status
 - Automated motion, navigation, obstacle, and collision tests
+- Direct-route obstacle detection
+- Nearest blocking-obstacle selection
+- Automatic temporary avoidance-waypoint generation
+- Autonomous navigation around blocking obstacles
+- Automatic resumption of destination navigation
+- Visible avoidance waypoint and live `AVOIDING` status
 
 ## Requirements
 
@@ -61,6 +67,7 @@ python -m unittest discover -s tests
 - `tests/` — automated motion, navigation, obstacle, and collision tests
 - `assets/` — future visual resources
 - `ENGINEERING_NOTES.md` — modeling decisions, assumptions, and limitations
+- `avoidance.py` — route-obstruction detection and avoidance-waypoint calculations
 
 ## Development Roadmap
 

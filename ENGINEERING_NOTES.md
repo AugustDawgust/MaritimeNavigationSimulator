@@ -84,6 +84,30 @@ The simulation checks the vessel against every obstacle after each movement upda
 
 Because collision detection occurs at discrete time steps, extremely large elapsed-time values could allow the vessel to move through an obstacle between checks. Normal frame times make this unlikely, but continuous collision detection could address this limitation in a future version.
 
+## Autonomous Obstacle Avoidance
+
+Version 0.4 adds geometric route planning around static circular obstacles.
+
+Before navigating directly toward the destination, the simulation checks whether any obstacle intersects the required clearance area around the finite route segment. Obstacles behind the vessel or beyond the destination are ignored.
+
+If multiple obstacles block the route, the nearest blocking obstacle is selected first.
+
+The simulator generates a temporary avoidance waypoint perpendicular to the direct route. Its offset from the obstacle center is:
+
+waypoint offset = obstacle radius + avoidance clearance + extra safety offset
+
+The vessel then:
+
+1. Navigates toward the temporary waypoint.
+2. Clears the waypoint after entering its configured arrival radius.
+3. Rechecks the direct route to the final destination.
+4. Generates another waypoint if a different obstacle blocks the new route.
+5. Resumes destination navigation when the route is clear.
+
+While a temporary waypoint is active, the status panel displays `AVOIDING`.
+
+The current planner always places the waypoint on one predetermined side of the route. It does not yet compare alternative routes, optimize travel distance, account for moving obstacles, or guarantee a solution in tightly clustered obstacle fields.
+
 ## Rendering
 
 The physics model stores position in meters. The renderer separately converts meters into pixels using a fixed display scale.
@@ -100,6 +124,8 @@ The renderer displays:
 - Current speed
 - Distance remaining
 - Navigation status
+- The active avoidance waypoint
+- Avoidance status
 
 Trail points are stored only after the vessel moves a configured minimum distance from the previous point. This avoids storing a new trail point every frame.
 
@@ -114,5 +140,9 @@ Trail points are stored only after the vessel moves a configured minimum distanc
 - Static obstacles only
 - No acceleration or deceleration model
 - No wind, waves, or current
-- No autonomous obstacle avoidance
 - Fixed camera
+- Avoidance uses one temporary waypoint at a time
+- Avoidance always selects one predetermined side of an obstacle
+- No path optimization or alternative-route comparison
+- No support for moving obstacles
+- No guarantee of a valid route through tightly clustered obstacles
