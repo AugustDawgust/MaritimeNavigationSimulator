@@ -1,6 +1,8 @@
 import pygame
 
 import config
+from simulation import Simulation
+from renderer import Renderer
 
 
 def main() -> None:
@@ -11,18 +13,21 @@ def main() -> None:
     )
     pygame.display.set_caption(config.WINDOW_TITLE)
 
+    simulation = Simulation()
+    renderer = Renderer(screen)
     clock = pygame.time.Clock()
     running = True
 
     while running:
+        dt_s = clock.tick(config.FPS) / 1000.0
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
-        screen.fill(config.BACKGROUND_COLOR)
-        pygame.display.flip()
+        simulation.update(dt_s)
 
-        clock.tick(config.FPS)
+        renderer.render(simulation.vessel)
 
     pygame.quit()
 
