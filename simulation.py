@@ -24,13 +24,17 @@ class Simulation:
             (self.vessel.x_m, self.vessel.y_m)
         ]
 
-    def update(self, dt_s: float) -> None:
-        distance_to_destination = calculate_distance(
+    @property
+    def distance_to_destination_m(self) -> float:
+        return calculate_distance(
             self.vessel.x_m,
             self.vessel.y_m,
             self.destination_x_m,
             self.destination_y_m,
         )
+
+    def update(self, dt_s: float) -> None:
+        distance_to_destination = self.distance_to_destination_m
 
         if distance_to_destination <= config.ARRIVAL_RADIUS_M:
             self.arrived = True

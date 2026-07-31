@@ -9,6 +9,10 @@ from vessel import Vessel
 class Renderer:
     def __init__(self, screen: pygame.Surface) -> None:
         self.screen = screen
+        self.status_font = pygame.font.Font(
+            None,
+            config.STATUS_FONT_SIZE,
+        )
 
     def render(
             self,
@@ -17,6 +21,7 @@ class Renderer:
             destination_y_m: float,
             arrived: bool,
             trail_points: list[tuple[float, float]],
+            distance_to_destination_m: float,
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
 
@@ -29,7 +34,74 @@ class Renderer:
         )
         self._draw_vessel(vessel)
 
+        self._draw_status_panel(
+            vessel,
+            distance_to_destination_m,
+            arrived,
+        )
+
         pygame.display.flip()
+
+    def _draw_status_panel(
+        self,
+        vessel: Vessel,
+        distance_to_destination_m: float,
+        arrived: bool,
+    ) -> None:
+        panel_rect = pygame.Rect(
+            config.STATUS_PANEL_X_PX,
+            config.STATUS_PANEL_Y_PX,
+            config.STATUS_PANEL_WIDTH_PX,
+            config.STATUS_PANEL_HEIGHT_PX,
+        )
+
+        pygame.draw.rect(
+            self.screen,
+            config.STATUS_PANEL_COLOR,
+            panel_rect,
+            border_radius=8,
+        )
+
+        status_text = "ARRIVED" if arrived else "NAVIGATING"
+        status_color = (
+            config.STATUS_ARRIVED_COLOR
+            if arrived
+            else config.STATUS_TEXT_COLOR
+        )
+
+        lines = [
+            (f"Status: {status_text}", status_color),
+            (
+                f"Heading: {vessel.heading_deg:.1f} deg",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Speed: {vessel.speed_mps:.1f} m/s",
+                config.STATUS_TEXT_COLOR,
+            ),
+            (
+                f"Distance: {distance_to_destination_m:.1f} m",
+                config.STATUS_TEXT_COLOR,
+            ),
+        ]
+
+        text_x = (
+            config.STATUS_PANEL_X_PX
+            + config.STATUS_PANEL_PADDING_PX
+        )
+        text_y = (
+            config.STATUS_PANEL_Y_PX
+            + config.STATUS_PANEL_PADDING_PX
+        )
+
+        for line, color in lines:
+            text_surface = self.status_font.render(
+                line,
+                True,
+                color,
+            )
+            self.screen.blit(text_surface, (text_x, text_y))
+            text_y += 28
 
     def _draw_vessel(self, vessel: Vessel) -> None:
         heading_rad = math.radians(vessel.heading_deg)

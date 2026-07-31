@@ -33,6 +33,7 @@ def main() -> None:
             simulation.destination_y_m,
             simulation.arrived,
             simulation.trail_points,
+            simulation.distance_to_destination_m,
         )
 
     pygame.quit()
