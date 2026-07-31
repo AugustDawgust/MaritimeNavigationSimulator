@@ -5,7 +5,8 @@ from navigation import (
     turn_toward_heading,
 )
 from vessel import Vessel
-
+from collision import vessel_collides_with_any_obstacle
+from obstacle import Obstacle
 
 class Simulation:
     def __init__(self) -> None:
@@ -19,6 +20,15 @@ class Simulation:
         self.destination_x_m = config.DESTINATION_X_M
         self.destination_y_m = config.DESTINATION_Y_M
         self.arrived = False
+        self.collided = False
+
+        self.obstacles = [
+            Obstacle(
+                x_m=config.OBSTACLE_X_M,
+                y_m=config.OBSTACLE_Y_M,
+                radius_m=config.OBSTACLE_RADIUS_M,
+            )
+        ]
 
         self.trail_points = [
             (self.vessel.x_m, self.vessel.y_m)
@@ -35,6 +45,9 @@ class Simulation:
 
     def update(self, dt_s: float) -> None:
         distance_to_destination = self.distance_to_destination_m
+
+        if self.arrived or self.collided:
+            return
 
         if distance_to_destination <= config.ARRIVAL_RADIUS_M:
             self.arrived = True
@@ -69,3 +82,11 @@ class Simulation:
             self.trail_points.append(
                 (self.vessel.x_m, self.vessel.y_m)
             )
+
+        if vessel_collides_with_any_obstacle(
+            self.vessel,
+            config.VESSEL_COLLISION_RADIUS_M,
+            self.obstacles,
+        ):
+            self.collided = True
+            self.vessel.speed_mps = 0.0

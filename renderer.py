@@ -5,6 +5,7 @@ import pygame
 import config
 from vessel import Vessel
 
+from obstacle import Obstacle
 
 class Renderer:
     def __init__(self, screen: pygame.Surface) -> None:
@@ -20,12 +21,15 @@ class Renderer:
             destination_x_m: float,
             destination_y_m: float,
             arrived: bool,
+            collided: bool,
             trail_points: list[tuple[float, float]],
             distance_to_destination_m: float,
+            obstacles: list[Obstacle],
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
 
         self._draw_trail(trail_points)
+        self._draw_obstacles(obstacles)
 
         self._draw_destination(
             destination_x_m,
@@ -38,15 +42,17 @@ class Renderer:
             vessel,
             distance_to_destination_m,
             arrived,
+            collided,
         )
 
         pygame.display.flip()
 
     def _draw_status_panel(
-        self,
-        vessel: Vessel,
-        distance_to_destination_m: float,
-        arrived: bool,
+            self,
+            vessel: Vessel,
+            distance_to_destination_m: float,
+            arrived: bool,
+            collided: bool,
     ) -> None:
         panel_rect = pygame.Rect(
             config.STATUS_PANEL_X_PX,
@@ -62,12 +68,15 @@ class Renderer:
             border_radius=8,
         )
 
-        status_text = "ARRIVED" if arrived else "NAVIGATING"
-        status_color = (
-            config.STATUS_ARRIVED_COLOR
-            if arrived
-            else config.STATUS_TEXT_COLOR
-        )
+        if collided:
+            status_text = "COLLISION"
+            status_color = config.STATUS_COLLISION_COLOR
+        elif arrived:
+            status_text = "ARRIVED"
+            status_color = config.STATUS_ARRIVED_COLOR
+        else:
+            status_text = "NAVIGATING"
+            status_color = config.STATUS_TEXT_COLOR
 
         lines = [
             (f"Status: {status_text}", status_color),
@@ -86,12 +95,12 @@ class Renderer:
         ]
 
         text_x = (
-            config.STATUS_PANEL_X_PX
-            + config.STATUS_PANEL_PADDING_PX
+                config.STATUS_PANEL_X_PX
+                + config.STATUS_PANEL_PADDING_PX
         )
         text_y = (
-            config.STATUS_PANEL_Y_PX
-            + config.STATUS_PANEL_PADDING_PX
+                config.STATUS_PANEL_Y_PX
+                + config.STATUS_PANEL_PADDING_PX
         )
 
         for line, color in lines:
@@ -162,6 +171,34 @@ class Renderer:
             screen_points,
             config.TRAIL_WIDTH_PX,
         )
+
+    def _draw_obstacles(
+        self,
+        obstacles: list[Obstacle],
+    ) -> None:
+        for obstacle in obstacles:
+            screen_position = self._world_to_screen(
+                obstacle.x_m,
+                obstacle.y_m,
+            )
+            radius_px = round(
+                obstacle.radius_m * config.PIXELS_PER_METER
+            )
+
+            pygame.draw.circle(
+                self.screen,
+                config.OBSTACLE_COLOR,
+                screen_position,
+                radius_px,
+            )
+            pygame.draw.circle(
+                self.screen,
+                config.OBSTACLE_OUTLINE_COLOR,
+                screen_position,
+                radius_px,
+                config.OBSTACLE_OUTLINE_WIDTH_PX,
+            )
+
     def _draw_destination(
         self,
         destination_x_m: float,
