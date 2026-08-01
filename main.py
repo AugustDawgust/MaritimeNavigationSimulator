@@ -24,6 +24,21 @@ def main() -> None:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif (
+                    event.type == pygame.MOUSEBUTTONDOWN
+                    and event.button == 1
+            ):
+                destination_x_m, destination_y_m = (
+                    renderer.screen_to_world(
+                        event.pos[0],
+                        event.pos[1],
+                    )
+                )
+
+                simulation.set_destination(
+                    destination_x_m,
+                    destination_y_m,
+                )
 
         simulation.update(dt_s)
 

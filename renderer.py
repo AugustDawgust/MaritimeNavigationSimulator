@@ -298,3 +298,18 @@ class Renderer:
         screen_x = config.WINDOW_WIDTH / 2 + x_m * config.PIXELS_PER_METER
         screen_y = config.WINDOW_HEIGHT / 2 - y_m * config.PIXELS_PER_METER
         return screen_x, screen_y
+
+    @staticmethod
+    def screen_to_world(
+            screen_x_px: float,
+            screen_y_px: float,
+    ) -> tuple[float, float]:
+        world_x_m = (
+                            screen_x_px - config.WINDOW_WIDTH / 2
+                    ) / config.PIXELS_PER_METER
+
+        world_y_m = (
+                            config.WINDOW_HEIGHT / 2 - screen_y_px
+                    ) / config.PIXELS_PER_METER
+
+        return world_x_m, world_y_m

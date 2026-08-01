@@ -513,6 +513,67 @@ class TestSimulation(unittest.TestCase):
             ),
             original_destination,
         )
+    def test_set_destination_resets_mission(self) -> None:
+        simulation = Simulation()
+
+        simulation.vessel.x_m = 12.0
+        simulation.vessel.y_m = 18.0
+        simulation.vessel.heading_deg = 135.0
+        simulation.vessel.speed_mps = 0.0
+
+        simulation.arrived = True
+        simulation.collided = True
+        simulation.navigation_blocked = True
+        simulation.avoidance_waypoint = (40.0, 50.0)
+        simulation.trail_points = [
+            (0.0, 0.0),
+            (12.0, 18.0),
+        ]
+
+        simulation.metrics.update(
+            distance_traveled_m=20.0,
+            speed_mps=4.0,
+            dt_s=5.0,
+        )
+
+        original_obstacles = simulation.obstacles
+
+        simulation.set_destination(90.0, 65.0)
+
+        self.assertEqual(simulation.destination_x_m, 90.0)
+        self.assertEqual(simulation.destination_y_m, 65.0)
+
+        self.assertEqual(simulation.vessel.x_m, 12.0)
+        self.assertEqual(simulation.vessel.y_m, 18.0)
+        self.assertEqual(simulation.vessel.heading_deg, 135.0)
+        self.assertEqual(
+            simulation.vessel.speed_mps,
+            config.INITIAL_VESSEL_SPEED_MPS,
+        )
+
+        self.assertFalse(simulation.arrived)
+        self.assertFalse(simulation.collided)
+        self.assertFalse(simulation.navigation_blocked)
+        self.assertIsNone(simulation.avoidance_waypoint)
+
+        self.assertEqual(
+            simulation.trail_points,
+            [(12.0, 18.0)],
+        )
+        self.assertEqual(
+            simulation.metrics.elapsed_time_s,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.distance_traveled_m,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.metrics.fuel_used_l,
+            0.0,
+        )
+
+        self.assertIs(simulation.obstacles, original_obstacles)
 
 if __name__ == "__main__":
     unittest.main()
