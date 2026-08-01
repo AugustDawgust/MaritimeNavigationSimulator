@@ -70,6 +70,36 @@ class Simulation:
             self.destination_x_m,
             self.destination_y_m,
         )
+    def set_destination(
+        self,
+        destination_x_m: float,
+        destination_y_m: float,
+    ) -> None:
+        self.destination_x_m = destination_x_m
+        self.destination_y_m = destination_y_m
+
+        self.arrived = False
+        self.collided = False
+        self.navigation_blocked = False
+        self.avoidance_waypoint = None
+
+        self.vessel.speed_mps = config.INITIAL_VESSEL_SPEED_MPS
+
+        self.trail_points = [
+            (
+                self.vessel.x_m,
+                self.vessel.y_m,
+            )
+        ]
+
+        self.metrics = MissionMetrics(
+            base_fuel_burn_rate_lph=(
+                config.BASE_FUEL_BURN_RATE_LPH
+            ),
+            speed_cubed_coefficient=(
+                config.SPEED_CUBED_COEFFICIENT
+            ),
+        )
     def update(self, dt_s: float) -> None:
         if (
                 self.arrived
