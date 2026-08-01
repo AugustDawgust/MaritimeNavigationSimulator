@@ -38,7 +38,6 @@ def main() -> None:
             simulation.obstacles,
             simulation.avoidance_waypoint,
             simulation.metrics,
-            route=simulation.route,
         )
 
     pygame.quit()
