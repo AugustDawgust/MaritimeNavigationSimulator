@@ -30,7 +30,7 @@ For collision detection, the vessel uses a conservative circular boundary center
 
 ## Waypoint Navigation
 
-The vessel autonomously navigates toward one fixed final destination.
+The vessel autonomously navigates toward the currently selected final destination.
 
 The desired heading is calculated from the vessel’s current position to the active target using the maritime heading convention. The active target is either:
 
@@ -63,6 +63,8 @@ After arrival:
 * The destination marker and status panel change appearance.
 * The status panel displays `ARRIVED`.
 
+A new destination can be selected after arrival to clear the arrival state and begin another mission.
+
 ## Obstacle Model
 
 The environment contains multiple static circular obstacles.
@@ -93,6 +95,8 @@ The simulation checks the vessel against every obstacle after each movement upda
 * Vessel speed is set to zero.
 * Future simulation and mission-metric updates stop.
 * The status panel displays `COLLISION`.
+
+A new destination can be selected after collision to clear the collision state and begin another mission from the vessel’s current position.
 
 Because collision detection occurs at discrete time steps, extremely large elapsed-time values could allow the vessel to move through an obstacle between checks. Normal frame times make this unlikely, but continuous collision detection could address this limitation in a future version.
 
@@ -157,6 +161,8 @@ When navigation becomes blocked:
 
 The blocked state is distinct from a collision. The vessel stops before knowingly committing to either unsafe candidate.
 
+Selecting a new destination clears the blocked state and begins a new mission from the vessel’s current position.
+
 ## Terminal States
 
 The simulation has three terminal states:
@@ -175,6 +181,78 @@ The status panel prioritizes terminal and navigation states in this order:
 4. `AVOIDING`
 5. `NAVIGATING`
 
+All three terminal states can be cleared by selecting a new destination.
+
+## Interactive Destination Selection
+
+Version 0.9 introduced interactive destination selection using the left mouse button.
+
+When a left-click event occurs, the application:
+
+1. Reads the cursor’s screen position.
+2. Converts that position from pixels to world coordinates.
+3. Passes the resulting coordinates to `Simulation.set_destination()`.
+4. Begins a fresh mission toward the selected location.
+
+This allows destinations to be changed during an active mission or after arrival, collision, or blocked navigation.
+
+## Screen-to-World Coordinate Conversion
+
+Pygame reports cursor positions in screen coordinates:
+
+* The screen origin is at the upper-left corner.
+* Positive screen x points right.
+* Positive screen y points downward.
+
+The simulation uses world coordinates centered in the window:
+
+* Positive world x points east.
+* Positive world y points north.
+
+Screen x is converted to world x using:
+
+```text
+world x =
+    (screen x − window width / 2)
+    / pixels per meter
+```
+
+Screen y is converted to world y using:
+
+```text
+world y =
+    (window height / 2 − screen y)
+    / pixels per meter
+```
+
+The reversed subtraction in the y conversion accounts for the opposite vertical-axis directions used by the simulation and Pygame.
+
+This operation is the inverse of the renderer’s world-to-screen coordinate conversion.
+
+## Mission Reset Behavior
+
+`Simulation.set_destination()` begins a new mission without recreating the entire simulation or moving the vessel back to its original starting point.
+
+When a new destination is selected:
+
+* The destination coordinates are replaced.
+* `arrived` becomes false.
+* `collided` becomes false.
+* `navigation_blocked` becomes false.
+* The active avoidance waypoint is cleared.
+* Vessel speed is restored to the configured initial operating speed.
+* The route trail is replaced with one point at the vessel’s current position.
+* Mission elapsed time is reset to zero.
+* Route distance is reset to zero.
+* Estimated fuel use is reset to zero.
+* The vessel’s position is preserved.
+* The vessel’s heading is preserved.
+* The obstacle collection is preserved.
+
+Preserving position and heading means the new mission begins from the vessel’s actual current pose. The normal turn-rate-limited controller then redirects the vessel toward the new destination.
+
+This differs from a complete application restart, which would recreate the vessel at its configured initial position and heading.
+
 ## Mission Metrics
 
 The simulation tracks:
@@ -185,6 +263,8 @@ The simulation tracks:
 * Current estimated fuel-burn rate
 
 Elapsed time accumulates during active simulation updates. Once the vessel arrives, collides, or becomes navigation blocked, future updates stop and the recorded mission metrics remain unchanged.
+
+Selecting a new destination creates a fresh mission-metrics record with zero elapsed time, distance, and fuel use.
 
 Route distance is calculated after each movement update from the vessel’s previous and current positions:
 
@@ -227,7 +307,7 @@ Positive world y-coordinates point north, while Pygame screen y-coordinates incr
 The renderer displays:
 
 * The vessel
-* The final destination marker
+* The selected final-destination marker
 * Multiple circular obstacles
 * A sampled route trail
 * The active avoidance waypoint
@@ -242,9 +322,11 @@ The renderer displays:
 
 Trail points are stored only after the vessel moves a configured minimum distance from the previous point. This avoids storing a new trail point every frame.
 
+When a new destination is selected, the previous trail is cleared and a new trail begins at the vessel’s current position.
+
 ## Automated Validation
 
-The test suite contains 56 automated tests covering:
+The Version 0.9 test suite contains 58 automated tests covering:
 
 * Vessel motion
 * Frame-rate-independent updates
@@ -262,6 +344,12 @@ The test suite contains 56 automated tests covering:
 * Multiple staggered obstacles
 * Preferred-side and opposite-side selection
 * Safe stopping when both avoidance sides are blocked
+* Interactive mission-state resetting
+* Preservation of vessel position and heading during mission reset
+* Preservation of existing obstacles during mission reset
+* Restoration of vessel speed
+* Trail and mission-metric resetting
+* Screen-to-world coordinate conversion
 * Mission elapsed time
 * Actual route distance
 * Fuel-burn calculations
@@ -270,8 +358,7 @@ The test suite contains 56 automated tests covering:
 
 ## Current Limitations
 
-* One fixed final destination
-* Constant speed until arrival, collision, or blocked navigation
+* Constant operating speed during each active mission
 * Fixed maximum turn rate
 * Point-based vessel motion
 * Circular approximation of vessel collision geometry
@@ -287,7 +374,10 @@ The test suite contains 56 automated tests covering:
 * No global path optimization
 * No support for moving obstacles
 * No guarantee of a valid route through tightly clustered obstacle fields
-* Blocked navigation requires an external reset to resume
+* New destinations are not validated before the mission begins
+* A destination can be selected inside an obstacle or inside its required clearance area
+* Selecting a new destination after collision clears the collision state without repositioning the vessel
+* Mouse input is the only interactive mission control
 * Simplified cubic-speed fuel model
 * Fuel coefficients are not calibrated to a real vessel
 * No engine-efficiency or propeller-efficiency model
