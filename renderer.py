@@ -3,13 +3,14 @@ import math
 import pygame
 
 import config
-from vessel import Vessel
-
-from obstacle import Obstacle
 from mission_metrics import (
     MissionMetrics,
     calculate_fuel_burn_rate_lph,
 )
+from mission_route import MissionRoute
+from obstacle import Obstacle
+from vessel import Vessel
+
 
 class Renderer:
     def __init__(self, screen: pygame.Surface) -> None:
@@ -20,20 +21,22 @@ class Renderer:
         )
 
     def render(
-            self,
-            vessel: Vessel,
-            destination_x_m: float,
-            destination_y_m: float,
-            arrived: bool,
-            collided: bool,
-            trail_points: list[tuple[float, float]],
-            distance_to_destination_m: float,
-            obstacles: list[Obstacle],
-            avoidance_waypoint: tuple[float, float] | None,
-            metrics: MissionMetrics,
+        self,
+        vessel: Vessel,
+        destination_x_m: float,
+        destination_y_m: float,
+        arrived: bool,
+        collided: bool,
+        trail_points: list[tuple[float, float]],
+        distance_to_destination_m: float,
+        obstacles: list[Obstacle],
+        avoidance_waypoint: tuple[float, float] | None,
+        metrics: MissionMetrics,
+        route: MissionRoute,
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
 
+        self._draw_mission_route(route)
         self._draw_trail(trail_points)
         self._draw_obstacles(obstacles)
         self._draw_avoidance_waypoint(avoidance_waypoint)
@@ -52,18 +55,20 @@ class Renderer:
             collided,
             avoidance_waypoint,
             metrics,
+            route,
         )
 
         pygame.display.flip()
 
     def _draw_status_panel(
-            self,
-            vessel: Vessel,
-            distance_to_destination_m: float,
-            arrived: bool,
-            collided: bool,
-            avoidance_waypoint: tuple[float, float] | None,
-            metrics: MissionMetrics,
+        self,
+        vessel: Vessel,
+        distance_to_destination_m: float,
+        arrived: bool,
+        collided: bool,
+        avoidance_waypoint: tuple[float, float] | None,
+        metrics: MissionMetrics,
+        route: MissionRoute,
     ) -> None:
         panel_rect = pygame.Rect(
             config.STATUS_PANEL_X_PX,
@@ -92,6 +97,13 @@ class Renderer:
             status_text = "NAVIGATING"
             status_color = config.STATUS_TEXT_COLOR
 
+        if route.is_complete:
+            displayed_waypoint_number = route.total_waypoint_count
+        else:
+            displayed_waypoint_number = (
+                route.current_waypoint_index + 1
+            )
+
         current_fuel_burn_rate_lph = (
             calculate_fuel_burn_rate_lph(
                 vessel.speed_mps,
@@ -102,6 +114,12 @@ class Renderer:
 
         lines = [
             (f"Status: {status_text}", status_color),
+            (
+                "Waypoint: "
+                f"{displayed_waypoint_number}/"
+                f"{route.total_waypoint_count}",
+                config.STATUS_TEXT_COLOR,
+            ),
             (
                 f"Heading: {vessel.heading_deg:.1f} deg",
                 config.STATUS_TEXT_COLOR,
@@ -133,12 +151,12 @@ class Renderer:
         ]
 
         text_x = (
-                config.STATUS_PANEL_X_PX
-                + config.STATUS_PANEL_PADDING_PX
+            config.STATUS_PANEL_X_PX
+            + config.STATUS_PANEL_PADDING_PX
         )
         text_y = (
-                config.STATUS_PANEL_Y_PX
-                + config.STATUS_PANEL_PADDING_PX
+            config.STATUS_PANEL_Y_PX
+            + config.STATUS_PANEL_PADDING_PX
         )
 
         for line, color in lines:
@@ -148,7 +166,96 @@ class Renderer:
                 color,
             )
             self.screen.blit(text_surface, (text_x, text_y))
-            text_y += 26
+            text_y += config.STATUS_LINE_SPACING_PX
+
+    def _draw_mission_route(
+        self,
+        route: MissionRoute,
+    ) -> None:
+        route_points = [
+            (
+                config.INITIAL_VESSEL_X_M,
+                config.INITIAL_VESSEL_Y_M,
+            ),
+            *route.waypoints,
+        ]
+
+        for waypoint_index in range(
+            route.total_waypoint_count
+        ):
+            start_position = self._world_to_screen(
+                *route_points[waypoint_index]
+            )
+            end_position = self._world_to_screen(
+                *route_points[waypoint_index + 1]
+            )
+
+            if waypoint_index < route.current_waypoint_index:
+                segment_color = (
+                    config.MISSION_ROUTE_COMPLETED_COLOR
+                )
+            elif (
+                waypoint_index == route.current_waypoint_index
+                and not route.is_complete
+            ):
+                segment_color = (
+                    config.MISSION_ROUTE_ACTIVE_COLOR
+                )
+            else:
+                segment_color = (
+                    config.MISSION_ROUTE_UPCOMING_COLOR
+                )
+
+            pygame.draw.line(
+                self.screen,
+                segment_color,
+                start_position,
+                end_position,
+                config.MISSION_ROUTE_WIDTH_PX,
+            )
+
+        for waypoint_index, waypoint in enumerate(
+            route.waypoints
+        ):
+            screen_position = self._world_to_screen(*waypoint)
+
+            is_final_waypoint = (
+                waypoint_index
+                == route.total_waypoint_count - 1
+            )
+
+            radius_px = (
+                config.DESTINATION_RADIUS_PX
+                if is_final_waypoint
+                else config.MISSION_WAYPOINT_RADIUS_PX
+            )
+
+            if waypoint_index < route.current_waypoint_index:
+                pygame.draw.circle(
+                    self.screen,
+                    config.MISSION_ROUTE_COMPLETED_COLOR,
+                    screen_position,
+                    radius_px,
+                )
+            elif (
+                waypoint_index == route.current_waypoint_index
+                and not route.is_complete
+            ):
+                pygame.draw.circle(
+                    self.screen,
+                    config.MISSION_ROUTE_ACTIVE_COLOR,
+                    screen_position,
+                    radius_px,
+                    config.MISSION_WAYPOINT_OUTLINE_WIDTH_PX,
+                )
+            else:
+                pygame.draw.circle(
+                    self.screen,
+                    config.MISSION_ROUTE_UPCOMING_COLOR,
+                    screen_position,
+                    radius_px,
+                    config.MISSION_WAYPOINT_OUTLINE_WIDTH_PX,
+                )
 
     def _draw_vessel(self, vessel: Vessel) -> None:
         heading_rad = math.radians(vessel.heading_deg)
@@ -190,6 +297,7 @@ class Renderer:
             config.VESSEL_COLOR,
             screen_points,
         )
+
     def _draw_trail(
         self,
         trail_points: list[tuple[float, float]],
@@ -209,6 +317,7 @@ class Renderer:
             screen_points,
             config.TRAIL_WIDTH_PX,
         )
+
     def _draw_avoidance_waypoint(
         self,
         avoidance_waypoint: tuple[float, float] | None,
@@ -234,6 +343,7 @@ class Renderer:
             config.AVOIDANCE_WAYPOINT_SIZE_PX,
             2,
         )
+
     def _draw_obstacles(
         self,
         obstacles: list[Obstacle],
@@ -286,9 +396,17 @@ class Renderer:
             config.DESTINATION_LINE_WIDTH_PX,
         )
 
-
     @staticmethod
-    def _world_to_screen(x_m: float, y_m: float) -> tuple[float, float]:
-        screen_x = config.WINDOW_WIDTH / 2 + x_m * config.PIXELS_PER_METER
-        screen_y = config.WINDOW_HEIGHT / 2 - y_m * config.PIXELS_PER_METER
+    def _world_to_screen(
+        x_m: float,
+        y_m: float,
+    ) -> tuple[float, float]:
+        screen_x = (
+            config.WINDOW_WIDTH / 2
+            + x_m * config.PIXELS_PER_METER
+        )
+        screen_y = (
+            config.WINDOW_HEIGHT / 2
+            - y_m * config.PIXELS_PER_METER
+        )
         return screen_x, screen_y

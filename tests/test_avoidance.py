@@ -1,11 +1,15 @@
+import math
 import unittest
 
 from avoidance import (
     calculate_avoidance_waypoint,
     find_nearest_blocking_obstacle,
     obstacle_blocks_route,
+    predict_vessel_trajectory,
+    trajectory_collides_with_obstacle,
 )
 from obstacle import Obstacle
+from vessel import Vessel
 
 
 class TestAvoidance(unittest.TestCase):
@@ -260,6 +264,167 @@ class TestAvoidance(unittest.TestCase):
 
         self.assertFalse(first_leg_blocked)
         self.assertFalse(second_leg_blocked)
+
+    def test_predicts_straight_vessel_trajectory(
+        self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=90.0,
+            speed_mps=5.0,
+        )
+
+        trajectory = predict_vessel_trajectory(
+            vessel,
+            target_x_m=100.0,
+            target_y_m=0.0,
+            max_turn_rate_deg_s=20.0,
+            prediction_horizon_s=2.0,
+            prediction_step_s=1.0,
+        )
+
+        self.assertEqual(len(trajectory), 3)
+        self.assertAlmostEqual(trajectory[0][0], 0.0)
+        self.assertAlmostEqual(trajectory[0][1], 0.0)
+        self.assertAlmostEqual(trajectory[1][0], 5.0)
+        self.assertAlmostEqual(trajectory[1][1], 0.0)
+        self.assertAlmostEqual(trajectory[2][0], 10.0)
+        self.assertAlmostEqual(trajectory[2][1], 0.0)
+
+    def test_predicted_trajectory_respects_turn_rate(
+        self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=0.0,
+            speed_mps=8.0,
+        )
+
+        trajectory = predict_vessel_trajectory(
+            vessel,
+            target_x_m=100.0,
+            target_y_m=0.0,
+            max_turn_rate_deg_s=20.0,
+            prediction_horizon_s=1.0,
+            prediction_step_s=1.0,
+        )
+
+        expected_x_m = 8.0 * math.sin(
+            math.radians(20.0)
+        )
+        expected_y_m = 8.0 * math.cos(
+            math.radians(20.0)
+        )
+
+        self.assertAlmostEqual(
+            trajectory[1][0],
+            expected_x_m,
+        )
+        self.assertAlmostEqual(
+            trajectory[1][1],
+            expected_y_m,
+        )
+
+    def test_prediction_does_not_modify_vessel(
+        self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=10.0,
+            y_m=20.0,
+            heading_deg=45.0,
+            speed_mps=8.0,
+        )
+
+        predict_vessel_trajectory(
+            vessel,
+            target_x_m=100.0,
+            target_y_m=0.0,
+            max_turn_rate_deg_s=20.0,
+            prediction_horizon_s=5.0,
+            prediction_step_s=0.5,
+        )
+
+        self.assertEqual(vessel.x_m, 10.0)
+        self.assertEqual(vessel.y_m, 20.0)
+        self.assertEqual(vessel.heading_deg, 45.0)
+        self.assertEqual(vessel.speed_mps, 8.0)
+
+    def test_detects_collision_on_curved_trajectory(
+        self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=0.0,
+            speed_mps=8.0,
+        )
+        obstacle = Obstacle(
+            x_m=8.0,
+            y_m=14.0,
+            radius_m=2.0,
+        )
+
+        self.assertFalse(
+            obstacle_blocks_route(
+                0.0,
+                0.0,
+                100.0,
+                0.0,
+                obstacle,
+                clearance_m=0.0,
+            )
+        )
+
+        trajectory = predict_vessel_trajectory(
+            vessel,
+            target_x_m=100.0,
+            target_y_m=0.0,
+            max_turn_rate_deg_s=20.0,
+            prediction_horizon_s=3.0,
+            prediction_step_s=1.0,
+        )
+
+        self.assertTrue(
+            trajectory_collides_with_obstacle(
+                trajectory,
+                obstacle,
+                clearance_m=0.0,
+            )
+        )
+
+    def test_predicted_trajectory_clears_distant_obstacle(
+        self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=0.0,
+            speed_mps=8.0,
+        )
+        obstacle = Obstacle(
+            x_m=50.0,
+            y_m=-20.0,
+            radius_m=2.0,
+        )
+
+        trajectory = predict_vessel_trajectory(
+            vessel,
+            target_x_m=100.0,
+            target_y_m=0.0,
+            max_turn_rate_deg_s=20.0,
+            prediction_horizon_s=3.0,
+            prediction_step_s=0.5,
+        )
+
+        self.assertFalse(
+            trajectory_collides_with_obstacle(
+                trajectory,
+                obstacle,
+                clearance_m=0.0,
+            )
+        )
 
 if __name__ == "__main__":
     unittest.main()
