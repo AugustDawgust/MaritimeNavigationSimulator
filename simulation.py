@@ -1,7 +1,7 @@
 import config
 from avoidance import (
-    calculate_avoidance_waypoint,
     find_nearest_blocking_obstacle,
+    find_safe_avoidance_waypoint,
 )
 from collision import vessel_collides_with_any_obstacle
 from navigation import (
@@ -27,6 +27,7 @@ class Simulation:
 
         self.arrived = False
         self.collided = False
+        self.navigation_blocked = False
         self.metrics = MissionMetrics(
             base_fuel_burn_rate_lph=(
                 config.BASE_FUEL_BURN_RATE_LPH
@@ -70,7 +71,11 @@ class Simulation:
             self.destination_y_m,
         )
     def update(self, dt_s: float) -> None:
-        if self.arrived or self.collided:
+        if (
+                self.arrived
+                or self.collided
+                or self.navigation_blocked
+        ):
             return
 
         if (
@@ -108,17 +113,23 @@ class Simulation:
             )
 
             if blocking_obstacle is not None:
-                self.avoidance_waypoint = (
-                    calculate_avoidance_waypoint(
-                        self.vessel.x_m,
-                        self.vessel.y_m,
-                        self.destination_x_m,
-                        self.destination_y_m,
-                        blocking_obstacle,
-                        config.AVOIDANCE_CLEARANCE_M,
-                        config.AVOIDANCE_EXTRA_OFFSET_M,
-                    )
+                safe_waypoint = find_safe_avoidance_waypoint(
+                    self.vessel.x_m,
+                    self.vessel.y_m,
+                    self.destination_x_m,
+                    self.destination_y_m,
+                    blocking_obstacle,
+                    self.obstacles,
+                    config.AVOIDANCE_CLEARANCE_M,
+                    config.AVOIDANCE_EXTRA_OFFSET_M,
                 )
+
+                if safe_waypoint is None:
+                    self.navigation_blocked = True
+                    self.vessel.speed_mps = 0.0
+                    return
+
+                self.avoidance_waypoint = safe_waypoint
 
         target_x_m, target_y_m = self.active_target
 

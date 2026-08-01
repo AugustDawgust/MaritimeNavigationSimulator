@@ -415,5 +415,104 @@ class TestSimulation(unittest.TestCase):
             original_destination,
         )
 
+    def test_selects_opposite_side_when_preferred_side_is_unsafe(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 90.0
+        simulation.destination_x_m = 100.0
+        simulation.destination_y_m = 0.0
+
+        blocking_obstacle = Obstacle(
+            x_m=50.0,
+            y_m=0.0,
+            radius_m=5.0,
+        )
+
+        waypoint_offset_m = (
+                blocking_obstacle.radius_m
+                + config.AVOIDANCE_CLEARANCE_M
+                + config.AVOIDANCE_EXTRA_OFFSET_M
+        )
+
+        simulation.obstacles = [
+            blocking_obstacle,
+            Obstacle(
+                x_m=50.0,
+                y_m=waypoint_offset_m,
+                radius_m=1.0,
+            ),
+        ]
+
+        simulation.avoidance_waypoint = None
+        simulation.update(0.05)
+
+        self.assertIsNotNone(simulation.avoidance_waypoint)
+
+        waypoint_x_m, waypoint_y_m = (
+            simulation.avoidance_waypoint
+        )
+
+        self.assertLess(waypoint_y_m, 0.0)
+        self.assertFalse(simulation.navigation_blocked)
+
+    def test_stops_when_neither_avoidance_side_is_safe(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 90.0
+        simulation.destination_x_m = 100.0
+        simulation.destination_y_m = 0.0
+
+        original_destination = (
+            simulation.destination_x_m,
+            simulation.destination_y_m,
+        )
+
+        blocking_obstacle = Obstacle(
+            x_m=50.0,
+            y_m=0.0,
+            radius_m=5.0,
+        )
+
+        waypoint_offset_m = (
+                blocking_obstacle.radius_m
+                + config.AVOIDANCE_CLEARANCE_M
+                + config.AVOIDANCE_EXTRA_OFFSET_M
+        )
+
+        simulation.obstacles = [
+            blocking_obstacle,
+            Obstacle(
+                x_m=50.0,
+                y_m=waypoint_offset_m,
+                radius_m=1.0,
+            ),
+            Obstacle(
+                x_m=50.0,
+                y_m=-waypoint_offset_m,
+                radius_m=1.0,
+            ),
+        ]
+
+        simulation.avoidance_waypoint = None
+        simulation.update(0.05)
+
+        self.assertTrue(simulation.navigation_blocked)
+        self.assertIsNone(simulation.avoidance_waypoint)
+        self.assertFalse(simulation.collided)
+        self.assertEqual(simulation.vessel.speed_mps, 0.0)
+        self.assertEqual(
+            (
+                simulation.destination_x_m,
+                simulation.destination_y_m,
+            ),
+            original_destination,
+        )
+
 if __name__ == "__main__":
     unittest.main()

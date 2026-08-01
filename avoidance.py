@@ -109,3 +109,50 @@ def calculate_avoidance_waypoint(
     )
 
     return waypoint_x_m, waypoint_y_m
+def find_safe_avoidance_waypoint(
+    start_x_m: float,
+    start_y_m: float,
+    destination_x_m: float,
+    destination_y_m: float,
+    blocking_obstacle: Obstacle,
+    obstacles: list[Obstacle],
+    clearance_m: float,
+    extra_offset_m: float,
+) -> tuple[float, float] | None:
+    preferred_waypoint = calculate_avoidance_waypoint(
+        start_x_m,
+        start_y_m,
+        destination_x_m,
+        destination_y_m,
+        blocking_obstacle,
+        clearance_m,
+        extra_offset_m,
+    )
+
+    preferred_x_m, preferred_y_m = preferred_waypoint
+
+    opposite_waypoint = (
+        2.0 * blocking_obstacle.x_m - preferred_x_m,
+        2.0 * blocking_obstacle.y_m - preferred_y_m,
+    )
+
+    for waypoint_x_m, waypoint_y_m in (
+        preferred_waypoint,
+        opposite_waypoint,
+    ):
+        waypoint_is_safe = all(
+            not obstacle_blocks_route(
+                start_x_m,
+                start_y_m,
+                waypoint_x_m,
+                waypoint_y_m,
+                obstacle,
+                clearance_m,
+            )
+            for obstacle in obstacles
+        )
+
+        if waypoint_is_safe:
+            return waypoint_x_m, waypoint_y_m
+
+    return None
