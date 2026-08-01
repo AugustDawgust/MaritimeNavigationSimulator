@@ -27,12 +27,14 @@ def main() -> None:
 
         simulation.update(dt_s)
 
+
         renderer.render(
             simulation.vessel,
             simulation.destination_x_m,
             simulation.destination_y_m,
             simulation.arrived,
             simulation.collided,
+            simulation.navigation_blocked,
             simulation.trail_points,
             simulation.distance_to_destination_m,
             simulation.obstacles,
