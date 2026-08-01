@@ -134,6 +134,99 @@ class TestSimulation(unittest.TestCase):
         self.assertFalse(simulation.collided)
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
 
+    def test_navigates_around_multiple_obstacles_and_arrives(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 90.0
+        simulation.destination_x_m = 120.0
+        simulation.destination_y_m = 0.0
+        simulation.obstacles = [
+            Obstacle(
+                x_m=40.0,
+                y_m=0.0,
+                radius_m=5.0,
+            ),
+            Obstacle(
+                x_m=80.0,
+                y_m=0.0,
+                radius_m=5.0,
+            ),
+        ]
+        simulation.avoidance_waypoint = None
+        simulation.trail_points = [(0.0, 0.0)]
+
+        avoidance_was_used = False
+
+        for _ in range(2500):
+            simulation.update(0.05)
+
+            if simulation.avoidance_waypoint is not None:
+                avoidance_was_used = True
+
+            if simulation.arrived or simulation.collided:
+                break
+
+        self.assertTrue(avoidance_was_used)
+        self.assertTrue(simulation.arrived)
+        self.assertFalse(simulation.collided)
+        self.assertEqual(simulation.vessel.speed_mps, 0.0)
+
+    def test_navigates_around_staggered_obstacles_and_arrives(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 90.0
+        simulation.destination_x_m = 180.0
+        simulation.destination_y_m = 0.0
+        simulation.obstacles = [
+            Obstacle(
+                x_m=50.0,
+                y_m=-5.0,
+                radius_m=5.0,
+            ),
+            Obstacle(
+                x_m=120.0,
+                y_m=5.0,
+                radius_m=5.0,
+            ),
+        ]
+        simulation.avoidance_waypoint = None
+        simulation.trail_points = [(0.0, 0.0)]
+
+        avoidance_targets_used: set[
+            tuple[float, float]
+        ] = set()
+
+        for _ in range(4000):
+            simulation.update(0.05)
+
+            if simulation.avoidance_waypoint is not None:
+                waypoint_x_m, waypoint_y_m = (
+                    simulation.avoidance_waypoint
+                )
+                avoidance_targets_used.add(
+                    (
+                        round(waypoint_x_m, 6),
+                        round(waypoint_y_m, 6),
+                    )
+                )
+
+            if simulation.arrived or simulation.collided:
+                break
+
+        self.assertGreaterEqual(
+            len(avoidance_targets_used),
+            2,
+        )
+        self.assertTrue(simulation.arrived)
+        self.assertFalse(simulation.collided)
+        self.assertEqual(simulation.vessel.speed_mps, 0.0)
+
     def test_resumes_destination_navigation_after_waypoint(
         self,
     ) -> None:
