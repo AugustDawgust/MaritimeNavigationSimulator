@@ -1,3 +1,4 @@
+import secrets
 import pygame
 
 import config
@@ -14,16 +15,31 @@ def main() -> None:
     pygame.display.set_caption(config.WINDOW_TITLE)
 
     simulation = Simulation()
+    simulation.reset_scenario(secrets.randbits(32))
     renderer = Renderer(screen)
     clock = pygame.time.Clock()
     running = True
 
+    invalid_destination_feedback_remaining_s = 0.0
+
     while running:
         dt_s = clock.tick(config.FPS) / 1000.0
+        invalid_destination_feedback_remaining_s = max(
+            0.0,
+            invalid_destination_feedback_remaining_s - dt_s,
+        )
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif (
+                    event.type == pygame.KEYDOWN
+                    and event.key == pygame.K_r
+            ):
+                simulation.reset_scenario(
+                    secrets.randbits(32)
+                )
+                invalid_destination_feedback_remaining_s = 0.0
             elif (
                     event.type == pygame.MOUSEBUTTONDOWN
                     and event.button == 1
@@ -35,10 +51,17 @@ def main() -> None:
                     )
                 )
 
-                simulation.set_destination(
+                destination_was_set = simulation.set_destination(
                     destination_x_m,
                     destination_y_m,
                 )
+
+                if destination_was_set:
+                    invalid_destination_feedback_remaining_s = 0.0
+                else:
+                    invalid_destination_feedback_remaining_s = (
+                        config.INVALID_DESTINATION_FEEDBACK_DURATION_S
+                    )
 
         simulation.update(dt_s)
 
@@ -50,6 +73,7 @@ def main() -> None:
             simulation.arrived,
             simulation.collided,
             simulation.navigation_blocked,
+            invalid_destination_feedback_remaining_s > 0.0,
             simulation.trail_points,
             simulation.distance_to_destination_m,
             simulation.obstacles,

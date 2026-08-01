@@ -2,9 +2,11 @@ import unittest
 
 from navigation import (
     calculate_desired_heading,
-    calculate_heading_error,
-    turn_toward_heading,
     calculate_distance,
+    calculate_guidance_speed,
+    calculate_heading_error,
+    has_reached_or_passed_waypoint,
+    turn_toward_heading,
 )
 
 class TestNavigation(unittest.TestCase):
@@ -80,6 +82,63 @@ class TestNavigation(unittest.TestCase):
         self.assertAlmostEqual(
             calculate_distance(10.0, 20.0, 10.0, 20.0),
             0.0,
+        )
+    def test_waypoint_is_completed_inside_radius(self) -> None:
+        self.assertTrue(
+            has_reached_or_passed_waypoint(
+                current_x_m=19.0,
+                current_y_m=10.0,
+                waypoint_x_m=20.0,
+                waypoint_y_m=10.0,
+                onward_target_x_m=100.0,
+                onward_target_y_m=10.0,
+                waypoint_radius_m=2.0,
+            )
+        )
+
+    def test_waypoint_is_completed_after_being_passed(
+            self,
+    ) -> None:
+        self.assertTrue(
+            has_reached_or_passed_waypoint(
+                current_x_m=22.0,
+                current_y_m=10.0,
+                waypoint_x_m=20.0,
+                waypoint_y_m=10.0,
+                onward_target_x_m=100.0,
+                onward_target_y_m=10.0,
+                waypoint_radius_m=1.0,
+            )
+        )
+
+    def test_waypoint_is_not_completed_before_crossing(
+            self,
+    ) -> None:
+        self.assertFalse(
+            has_reached_or_passed_waypoint(
+                current_x_m=15.0,
+                current_y_m=10.0,
+                waypoint_x_m=20.0,
+                waypoint_y_m=10.0,
+                onward_target_x_m=100.0,
+                onward_target_y_m=10.0,
+                waypoint_radius_m=1.0,
+            )
+        )
+
+    def test_sideways_position_does_not_count_as_passed(
+            self,
+    ) -> None:
+        self.assertFalse(
+            has_reached_or_passed_waypoint(
+                current_x_m=20.0,
+                current_y_m=20.0,
+                waypoint_x_m=20.0,
+                waypoint_y_m=10.0,
+                onward_target_x_m=100.0,
+                onward_target_y_m=10.0,
+                waypoint_radius_m=1.0,
+            )
         )
 if __name__ == "__main__":
     unittest.main()

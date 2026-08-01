@@ -7,11 +7,14 @@ from collision import vessel_collides_with_any_obstacle
 from navigation import (
     calculate_desired_heading,
     calculate_distance,
+    calculate_guidance_speed,
+    has_reached_or_passed_waypoint,
     turn_toward_heading,
 )
 from obstacle import Obstacle
 from vessel import Vessel
 from mission_metrics import MissionMetrics
+from scenario import generate_obstacles
 
 class Simulation:
     def __init__(self) -> None:
@@ -45,7 +48,7 @@ class Simulation:
             )
             for x_m, y_m, radius_m in config.OBSTACLES
         ]
-
+        self.scenario_seed: int | None = None
         self.avoidance_waypoint: tuple[float, float] | None = None
 
         self.trail_points = [
@@ -70,11 +73,40 @@ class Simulation:
             self.destination_x_m,
             self.destination_y_m,
         )
-    def set_destination(
+    def is_destination_valid(
         self,
         destination_x_m: float,
         destination_y_m: float,
-    ) -> None:
+    ) -> bool:
+        for obstacle in self.obstacles:
+            distance_to_obstacle_m = calculate_distance(
+                destination_x_m,
+                destination_y_m,
+                obstacle.x_m,
+                obstacle.y_m,
+            )
+
+            required_clearance_m = (
+                obstacle.radius_m
+                + config.AVOIDANCE_CLEARANCE_M
+            )
+
+            if distance_to_obstacle_m <= required_clearance_m:
+                return False
+
+        return True
+
+    def set_destination(
+            self,
+            destination_x_m: float,
+            destination_y_m: float,
+    ) -> bool:
+        if not self.is_destination_valid(
+                destination_x_m,
+                destination_y_m,
+        ):
+            return False
+
         self.destination_x_m = destination_x_m
         self.destination_y_m = destination_y_m
 
@@ -84,6 +116,77 @@ class Simulation:
         self.avoidance_waypoint = None
 
         self.vessel.speed_mps = config.INITIAL_VESSEL_SPEED_MPS
+
+        self.trail_points = [
+            (
+                self.vessel.x_m,
+                self.vessel.y_m,
+            )
+        ]
+
+        self.metrics = MissionMetrics(
+            base_fuel_burn_rate_lph=(
+                config.BASE_FUEL_BURN_RATE_LPH
+            ),
+            speed_cubed_coefficient=(
+                config.SPEED_CUBED_COEFFICIENT
+            ),
+        )
+        return True
+    def reset_scenario(self, seed: int) -> None:
+        new_obstacles = generate_obstacles(
+            seed=seed,
+            obstacle_count=config.SCENARIO_OBSTACLE_COUNT,
+            world_width_m=(
+                config.WINDOW_WIDTH
+                / config.PIXELS_PER_METER
+            ),
+            world_height_m=(
+                config.WINDOW_HEIGHT
+                / config.PIXELS_PER_METER
+            ),
+            min_radius_m=config.SCENARIO_MIN_RADIUS_M,
+            max_radius_m=config.SCENARIO_MAX_RADIUS_M,
+            edge_clearance_m=(
+                config.SCENARIO_EDGE_CLEARANCE_M
+            ),
+            obstacle_spacing_m=(
+                config.SCENARIO_OBSTACLE_SPACING_M
+            ),
+            protected_points=[
+                (
+                    config.INITIAL_VESSEL_X_M,
+                    config.INITIAL_VESSEL_Y_M,
+                    config.SCENARIO_START_CLEARANCE_M,
+                ),
+                (
+                    config.DESTINATION_X_M,
+                    config.DESTINATION_Y_M,
+                    config.SCENARIO_DESTINATION_CLEARANCE_M,
+                ),
+            ],
+            max_attempts=(
+                config.SCENARIO_MAX_GENERATION_ATTEMPTS
+            ),
+        )
+
+        self.vessel = Vessel(
+            x_m=config.INITIAL_VESSEL_X_M,
+            y_m=config.INITIAL_VESSEL_Y_M,
+            heading_deg=config.INITIAL_VESSEL_HEADING_DEG,
+            speed_mps=config.INITIAL_VESSEL_SPEED_MPS,
+        )
+
+        self.destination_x_m = config.DESTINATION_X_M
+        self.destination_y_m = config.DESTINATION_Y_M
+
+        self.arrived = False
+        self.collided = False
+        self.navigation_blocked = False
+        self.avoidance_waypoint = None
+
+        self.obstacles = new_obstacles
+        self.scenario_seed = seed
 
         self.trail_points = [
             (
@@ -117,49 +220,54 @@ class Simulation:
             return
 
         if self.avoidance_waypoint is not None:
-            waypoint_x_m, waypoint_y_m = self.avoidance_waypoint
-
-            distance_to_waypoint_m = calculate_distance(
-                self.vessel.x_m,
-                self.vessel.y_m,
-                waypoint_x_m,
-                waypoint_y_m,
+            waypoint_x_m, waypoint_y_m = (
+                self.avoidance_waypoint
             )
 
-            if (
-                distance_to_waypoint_m
-                <= config.AVOIDANCE_WAYPOINT_RADIUS_M
+            if has_reached_or_passed_waypoint(
+                    current_x_m=self.vessel.x_m,
+                    current_y_m=self.vessel.y_m,
+                    waypoint_x_m=waypoint_x_m,
+                    waypoint_y_m=waypoint_y_m,
+                    onward_target_x_m=self.destination_x_m,
+                    onward_target_y_m=self.destination_y_m,
+                    waypoint_radius_m=(
+                            config.AVOIDANCE_WAYPOINT_RADIUS_M
+                    ),
             ):
                 self.avoidance_waypoint = None
 
-        if self.avoidance_waypoint is None:
-            blocking_obstacle = find_nearest_blocking_obstacle(
+        route_target_x_m, route_target_y_m = (
+            self.active_target
+        )
+
+        blocking_obstacle = find_nearest_blocking_obstacle(
+            self.vessel.x_m,
+            self.vessel.y_m,
+            route_target_x_m,
+            route_target_y_m,
+            self.obstacles,
+            config.AVOIDANCE_CLEARANCE_M,
+        )
+
+        if blocking_obstacle is not None:
+            safe_waypoint = find_safe_avoidance_waypoint(
                 self.vessel.x_m,
                 self.vessel.y_m,
-                self.destination_x_m,
-                self.destination_y_m,
+                route_target_x_m,
+                route_target_y_m,
+                blocking_obstacle,
                 self.obstacles,
                 config.AVOIDANCE_CLEARANCE_M,
+                config.AVOIDANCE_EXTRA_OFFSET_M,
             )
 
-            if blocking_obstacle is not None:
-                safe_waypoint = find_safe_avoidance_waypoint(
-                    self.vessel.x_m,
-                    self.vessel.y_m,
-                    self.destination_x_m,
-                    self.destination_y_m,
-                    blocking_obstacle,
-                    self.obstacles,
-                    config.AVOIDANCE_CLEARANCE_M,
-                    config.AVOIDANCE_EXTRA_OFFSET_M,
-                )
+            if safe_waypoint is None:
+                self.navigation_blocked = True
+                self.vessel.speed_mps = 0.0
+                return
 
-                if safe_waypoint is None:
-                    self.navigation_blocked = True
-                    self.vessel.speed_mps = 0.0
-                    return
-
-                self.avoidance_waypoint = safe_waypoint
+            self.avoidance_waypoint = safe_waypoint
 
         target_x_m, target_y_m = self.active_target
 
@@ -168,6 +276,33 @@ class Simulation:
             self.vessel.y_m,
             target_x_m,
             target_y_m,
+        )
+        distance_to_active_target_m = calculate_distance(
+            self.vessel.x_m,
+            self.vessel.y_m,
+            target_x_m,
+            target_y_m,
+        )
+
+        self.vessel.speed_mps = calculate_guidance_speed(
+            current_heading_deg=self.vessel.heading_deg,
+            desired_heading_deg=desired_heading_deg,
+            distance_to_target_m=distance_to_active_target_m,
+            cruise_speed_mps=(
+                config.INITIAL_VESSEL_SPEED_MPS
+            ),
+            max_turn_rate_deg_s=(
+                config.MAX_TURN_RATE_DEG_S
+            ),
+            minimum_speed_mps=(
+                config.MIN_GUIDANCE_SPEED_MPS
+            ),
+            turn_radius_factor=(
+                config.GUIDANCE_TURN_RADIUS_FACTOR
+            ),
+            minimum_turn_demand=(
+                config.GUIDANCE_MIN_TURN_DEMAND
+            ),
         )
 
         self.vessel.heading_deg = turn_toward_heading(

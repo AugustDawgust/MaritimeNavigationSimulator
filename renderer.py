@@ -27,6 +27,7 @@ class Renderer:
             arrived: bool,
             collided: bool,
             navigation_blocked: bool,
+            invalid_destination: bool,
             trail_points: list[tuple[float, float]],
             distance_to_destination_m: float,
             obstacles: list[Obstacle],
@@ -52,6 +53,7 @@ class Renderer:
             arrived,
             collided,
             navigation_blocked,
+            invalid_destination,
             avoidance_waypoint,
             metrics,
         )
@@ -65,6 +67,7 @@ class Renderer:
             arrived: bool,
             collided: bool,
             navigation_blocked: bool,
+            invalid_destination: bool,
             avoidance_waypoint: tuple[float, float] | None,
             metrics: MissionMetrics,
     ) -> None:
@@ -82,7 +85,12 @@ class Renderer:
             border_radius=8,
         )
 
-        if collided:
+        if invalid_destination:
+            status_text = "INVALID DESTINATION"
+            status_color = (
+                config.STATUS_INVALID_DESTINATION_COLOR
+            )
+        elif collided:
             status_text = "COLLISION"
             status_color = config.STATUS_COLLISION_COLOR
         elif arrived:
