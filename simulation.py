@@ -60,6 +60,15 @@ class Simulation:
             self.destination_y_m,
         )
 
+    @property
+    def active_target(self) -> tuple[float, float]:
+        if self.avoidance_waypoint is not None:
+            return self.avoidance_waypoint
+
+        return (
+            self.destination_x_m,
+            self.destination_y_m,
+        )
     def update(self, dt_s: float) -> None:
         if self.arrived or self.collided:
             return
@@ -111,11 +120,7 @@ class Simulation:
                     )
                 )
 
-        if self.avoidance_waypoint is None:
-            target_x_m = self.destination_x_m
-            target_y_m = self.destination_y_m
-        else:
-            target_x_m, target_y_m = self.avoidance_waypoint
+        target_x_m, target_y_m = self.active_target
 
         desired_heading_deg = calculate_desired_heading(
             self.vessel.x_m,

@@ -284,5 +284,43 @@ class TestSimulation(unittest.TestCase):
             expected_fuel_used_l,
         )
 
+    def test_destination_is_active_target_without_avoidance(
+            self,
+    ) -> None:
+        simulation = Simulation()
+
+        self.assertEqual(
+            simulation.active_target,
+            (
+                simulation.destination_x_m,
+                simulation.destination_y_m,
+            ),
+        )
+
+    def test_avoidance_waypoint_becomes_active_target(
+            self,
+    ) -> None:
+        simulation = Simulation()
+
+        original_destination = (
+            simulation.destination_x_m,
+            simulation.destination_y_m,
+        )
+
+        simulation.avoidance_waypoint = (25.0, 30.0)
+
+        self.assertEqual(
+            simulation.active_target,
+            (25.0, 30.0),
+        )
+
+        self.assertEqual(
+            (
+                simulation.destination_x_m,
+                simulation.destination_y_m,
+            ),
+            original_destination,
+        )
+
 if __name__ == "__main__":
     unittest.main()
