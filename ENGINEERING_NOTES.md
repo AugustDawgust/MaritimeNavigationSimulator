@@ -20,7 +20,7 @@ Vessel position is updated using the actual elapsed time between frames:
 position change = velocity × elapsed time
 ```
 
-This makes the simulated speed independent of the rendering frame rate.
+This makes simulated speed independent of the rendering frame rate.
 
 ## Vessel Model
 
@@ -30,9 +30,14 @@ For collision detection, the vessel uses a conservative circular boundary center
 
 ## Waypoint Navigation
 
-The vessel autonomously navigates toward one fixed destination.
+The vessel autonomously navigates toward one fixed final destination.
 
-The desired heading is calculated from the vessel’s current position to the destination using the maritime heading convention. The controller finds the shortest signed heading error so the vessel turns correctly across the 0-degree and 360-degree boundary.
+The desired heading is calculated from the vessel’s current position to the active target using the maritime heading convention. The active target is either:
+
+* The final destination
+* A temporary obstacle-avoidance waypoint
+
+The controller finds the shortest signed heading error so the vessel turns correctly across the 0-degree and 360-degree boundary.
 
 A positive heading error produces a clockwise turn, while a negative heading error produces a counterclockwise turn.
 
@@ -48,7 +53,7 @@ If the remaining heading error is smaller than the permitted change, the vessel 
 
 ## Arrival Detection
 
-The vessel is considered to have arrived when its straight-line distance from the destination is less than or equal to the configured arrival radius.
+The vessel is considered to have arrived when its straight-line distance from the final destination is less than or equal to the configured arrival radius.
 
 After arrival:
 
@@ -56,10 +61,11 @@ After arrival:
 * Vessel speed is set to zero.
 * Navigation and mission-metric updates stop.
 * The destination marker and status panel change appearance.
+* The status panel displays `ARRIVED`.
 
 ## Obstacle Model
 
-Version 0.3 introduced multiple static circular obstacles.
+The environment contains multiple static circular obstacles.
 
 Each obstacle stores:
 
@@ -90,42 +96,95 @@ The simulation checks the vessel against every obstacle after each movement upda
 
 Because collision detection occurs at discrete time steps, extremely large elapsed-time values could allow the vessel to move through an obstacle between checks. Normal frame times make this unlikely, but continuous collision detection could address this limitation in a future version.
 
+## Direct-Route Obstacle Detection
+
+Before navigating directly toward the final destination, the simulation checks whether any obstacle intersects the configured clearance area around the finite route segment.
+
+Obstacles behind the vessel or beyond the destination are ignored.
+
+If multiple obstacles block the route, the nearest blocking obstacle is selected first. Distance is measured from the vessel’s current position to each blocking obstacle’s center.
+
+After completing one avoidance maneuver, the vessel rechecks the direct route. This allows the reactive controller to make separate avoidance decisions for multiple aligned or staggered obstacles.
+
 ## Autonomous Obstacle Avoidance
 
-Version 0.4 added geometric route planning around static circular obstacles.
+The simulator uses geometric temporary-waypoint navigation around static circular obstacles.
 
-Before navigating directly toward the destination, the simulation checks whether any obstacle intersects the required clearance area around the finite route segment. Obstacles behind the vessel or beyond the destination are ignored.
-
-If multiple obstacles block the route, the nearest blocking obstacle is selected first.
-
-The simulator generates a temporary avoidance waypoint perpendicular to the direct route. Its offset from the obstacle center is:
+For the nearest blocking obstacle, the controller first generates a preferred avoidance waypoint perpendicular to the direct route. Its offset from the obstacle center is:
 
 ```text
-waypoint offset = obstacle radius + avoidance clearance + extra safety offset
+waypoint offset =
+    obstacle radius
+    + avoidance clearance
+    + extra safety offset
 ```
+
+The opposite-side candidate is created by reflecting the preferred waypoint across the obstacle’s center.
+
+The controller evaluates the two candidates in this order:
+
+1. Preferred-side waypoint
+2. Opposite-side waypoint
+
+A candidate is considered unsafe if the finite approach segment from the vessel to that waypoint intersects the configured clearance area around any obstacle.
+
+The controller selects the preferred candidate when it is safe. If the preferred candidate is unsafe, it uses the opposite candidate when available.
 
 The vessel then:
 
-1. Navigates toward the temporary waypoint.
+1. Navigates toward the selected temporary waypoint.
 2. Clears the waypoint after entering its configured arrival radius.
 3. Rechecks the direct route to the final destination.
-4. Generates another waypoint if a different obstacle blocks the new route.
+4. Generates another waypoint if an obstacle still blocks the route.
 5. Resumes destination navigation when the route is clear.
 
 While a temporary waypoint is active, the status panel displays `AVOIDING`.
 
-The current planner always places the waypoint on one predetermined side of the route. It does not yet compare alternative routes, optimize travel distance, account for moving obstacles, or guarantee a solution in tightly clustered obstacle fields.
+This reactive process has been validated with both aligned and staggered multiple-obstacle scenarios.
+
+## Safe Navigation Failure
+
+If neither avoidance-side candidate provides a safe approach, the simulator enters a blocked-navigation state instead of selecting an unsafe target.
+
+When navigation becomes blocked:
+
+* `navigation_blocked` becomes true.
+* No avoidance waypoint is activated.
+* Vessel speed is set to zero.
+* The final destination remains unchanged.
+* Future simulation and mission-metric updates stop.
+* The status panel displays `NAVIGATION BLOCKED`.
+
+The blocked state is distinct from a collision. The vessel stops before knowingly committing to either unsafe candidate.
+
+## Terminal States
+
+The simulation has three terminal states:
+
+* Arrival
+* Collision
+* Navigation blocked
+
+Once any terminal state becomes active, future motion and mission-metric updates stop.
+
+The status panel prioritizes terminal and navigation states in this order:
+
+1. `COLLISION`
+2. `ARRIVED`
+3. `NAVIGATION BLOCKED`
+4. `AVOIDING`
+5. `NAVIGATING`
 
 ## Mission Metrics
 
-Version 0.5 adds live tracking of:
+The simulation tracks:
 
 * Mission elapsed time
 * Actual route distance traveled
 * Estimated fuel used
 * Current estimated fuel-burn rate
 
-Elapsed time accumulates during active simulation updates. Once the vessel arrives or collides, future updates stop and the recorded mission metrics remain unchanged.
+Elapsed time accumulates during active simulation updates. Once the vessel arrives, collides, or becomes navigation blocked, future updates stop and the recorded mission metrics remain unchanged.
 
 Route distance is calculated after each movement update from the vessel’s previous and current positions:
 
@@ -137,7 +196,7 @@ The calculated distance is added to the cumulative route distance. This measures
 
 ## Fuel-Consumption Model
 
-Version 0.5 uses a simplified cubic-speed model to estimate fuel consumption while the vessel is moving:
+The simulator uses a simplified cubic-speed model to estimate fuel consumption while the vessel is moving:
 
 ```text
 fuel burn rate = base fuel burn rate + speed coefficient × speed³
@@ -145,7 +204,7 @@ fuel burn rate = base fuel burn rate + speed coefficient × speed³
 
 The cubic term approximates the general marine-engineering relationship in which the propulsion power required by a displacement vessel increases approximately with the cube of speed under comparable operating conditions.
 
-The fuel used during one update is:
+Fuel used during one update is:
 
 ```text
 fuel used = fuel burn rate × elapsed time / 3600
@@ -168,7 +227,7 @@ Positive world y-coordinates point north, while Pygame screen y-coordinates incr
 The renderer displays:
 
 * The vessel
-* The destination marker
+* The final destination marker
 * Multiple circular obstacles
 * A sampled route trail
 * The active avoidance waypoint
@@ -179,14 +238,40 @@ The renderer displays:
 * Actual route distance
 * Estimated cumulative fuel use
 * Current estimated fuel-burn rate
-* Navigation and avoidance status
+* Navigation, avoidance, arrival, collision, and blocked status
 
 Trail points are stored only after the vessel moves a configured minimum distance from the previous point. This avoids storing a new trail point every frame.
 
+## Automated Validation
+
+The test suite contains 56 automated tests covering:
+
+* Vessel motion
+* Frame-rate-independent updates
+* Maritime heading calculations
+* Shortest-direction turning
+* Turn-rate limiting
+* Arrival behavior
+* Obstacle validation
+* Circular collision detection
+* Direct-route obstruction detection
+* Nearest blocking-obstacle selection
+* Avoidance-waypoint calculations
+* End-to-end obstacle avoidance
+* Multiple aligned obstacles
+* Multiple staggered obstacles
+* Preferred-side and opposite-side selection
+* Safe stopping when both avoidance sides are blocked
+* Mission elapsed time
+* Actual route distance
+* Fuel-burn calculations
+* Cumulative fuel use
+* Terminal-state metric freezing
+
 ## Current Limitations
 
-* One fixed destination
-* Constant speed until arrival or collision
+* One fixed final destination
+* Constant speed until arrival, collision, or blocked navigation
 * Fixed maximum turn rate
 * Point-based vessel motion
 * Circular approximation of vessel collision geometry
@@ -196,10 +281,13 @@ Trail points are stored only after the vessel moves a configured minimum distanc
 * No wind, waves, or current
 * Fixed camera
 * Avoidance uses one temporary waypoint at a time
-* Avoidance always selects one predetermined side of an obstacle
-* No path optimization or alternative-route comparison
+* Preferred-side candidate is checked before the opposite side
+* No comparison of total route length between safe candidates
+* Candidate safety considers the approach to the temporary waypoint rather than planning the complete remaining route
+* No global path optimization
 * No support for moving obstacles
-* No guarantee of a valid route through tightly clustered obstacles
+* No guarantee of a valid route through tightly clustered obstacle fields
+* Blocked navigation requires an external reset to resume
 * Simplified cubic-speed fuel model
 * Fuel coefficients are not calibrated to a real vessel
 * No engine-efficiency or propeller-efficiency model
