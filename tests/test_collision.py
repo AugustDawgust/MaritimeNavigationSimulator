@@ -86,6 +86,52 @@ class TestCollision(unittest.TestCase):
             )
         )
 
+    def test_collision_occurs_exactly_at_combined_radius(
+            self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=0.0,
+            speed_mps=0.0,
+        )
+        obstacle = Obstacle(
+            x_m=11.0,
+            y_m=0.0,
+            radius_m=5.0,
+        )
+
+        self.assertTrue(
+            vessel_collides_with_obstacle(
+                vessel,
+                vessel_collision_radius_m=6.0,
+                obstacle=obstacle,
+            )
+        )
+
+    def test_no_collision_immediately_outside_combined_radius(
+            self,
+    ) -> None:
+        vessel = Vessel(
+            x_m=0.0,
+            y_m=0.0,
+            heading_deg=0.0,
+            speed_mps=0.0,
+        )
+        obstacle = Obstacle(
+            x_m=11.000001,
+            y_m=0.0,
+            radius_m=5.0,
+        )
+
+        self.assertFalse(
+            vessel_collides_with_obstacle(
+                vessel,
+                vessel_collision_radius_m=6.0,
+                obstacle=obstacle,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

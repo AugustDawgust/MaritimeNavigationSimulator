@@ -1,4 +1,6 @@
 import config
+import math
+
 from avoidance import (
     find_nearest_blocking_obstacle,
     find_safe_avoidance_waypoint,
@@ -15,6 +17,7 @@ from obstacle import Obstacle
 from vessel import Vessel
 from mission_metrics import MissionMetrics
 from scenario import generate_obstacles
+from route_planner import find_route
 
 class Simulation:
     def __init__(self) -> None:
@@ -24,7 +27,9 @@ class Simulation:
             heading_deg=config.INITIAL_VESSEL_HEADING_DEG,
             speed_mps=config.INITIAL_VESSEL_SPEED_MPS,
         )
-
+        self.route_waypoints: list[
+            tuple[float, float]
+        ] = []
         self.destination_x_m = config.DESTINATION_X_M
         self.destination_y_m = config.DESTINATION_Y_M
 
@@ -66,6 +71,9 @@ class Simulation:
 
     @property
     def active_target(self) -> tuple[float, float]:
+        if self.route_waypoints:
+            return self.route_waypoints[0]
+
         if self.avoidance_waypoint is not None:
             return self.avoidance_waypoint
 
@@ -132,7 +140,10 @@ class Simulation:
                 config.SPEED_CUBED_COEFFICIENT
             ),
         )
-        return True
+        self.route_waypoints = []
+        self.avoidance_waypoint = None
+
+        return self.plan_route()
     def reset_scenario(self, seed: int) -> None:
         new_obstacles = generate_obstacles(
             seed=seed,
@@ -177,6 +188,8 @@ class Simulation:
             speed_mps=config.INITIAL_VESSEL_SPEED_MPS,
         )
 
+        self.route_waypoints = []
+
         self.destination_x_m = config.DESTINATION_X_M
         self.destination_y_m = config.DESTINATION_Y_M
 
@@ -203,7 +216,49 @@ class Simulation:
                 config.SPEED_CUBED_COEFFICIENT
             ),
         )
+    def plan_route(self) -> bool:
+        planned_route = find_route(
+            start=(
+                self.vessel.x_m,
+                self.vessel.y_m,
+            ),
+            destination=(
+                self.destination_x_m,
+                self.destination_y_m,
+            ),
+            obstacles=self.obstacles,
+            clearance_m=config.AVOIDANCE_CLEARANCE_M,
+        )
+
+        if planned_route is None:
+            self.route_waypoints = []
+            self.navigation_blocked = True
+            self.vessel.speed_mps = 0.0
+            return False
+
+        self.route_waypoints = planned_route
+        self.navigation_blocked = False
+        return True
+    def _advance_reached_route_waypoints(self) -> None:
+        while self.route_waypoints:
+            waypoint_x_m, waypoint_y_m = (
+                self.route_waypoints[0]
+            )
+
+            distance_to_waypoint_m = math.hypot(
+                waypoint_x_m - self.vessel.x_m,
+                waypoint_y_m - self.vessel.y_m,
+            )
+
+            if (
+                    distance_to_waypoint_m
+                    > config.ARRIVAL_RADIUS_M
+            ):
+                break
+
+            self.route_waypoints.pop(0)
     def update(self, dt_s: float) -> None:
+        self._advance_reached_route_waypoints()
         if (
                 self.arrived
                 or self.collided
