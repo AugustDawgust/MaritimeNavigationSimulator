@@ -300,10 +300,33 @@ class Simulation:
             )
         )
 
-        if (
+        nearest_obstacle_clearance_m = min(
+            (
+                calculate_distance(
+                    self.vessel.x_m,
+                    self.vessel.y_m,
+                    obstacle.x_m,
+                    obstacle.y_m,
+                )
+                - obstacle.radius_m
+                - config.VESSEL_COLLISION_RADIUS_M
+                for obstacle in self.obstacles
+            ),
+            default=float("inf"),
+        )
+
+        requires_alignment_hold = (
                 heading_error_deg
                 > config.GUIDANCE_ALIGNMENT_TOLERANCE_DEG
-        ):
+                and (
+                        distance_to_active_target_m
+                        <= config.GUIDANCE_ALIGNMENT_HOLD_DISTANCE_M
+                        or nearest_obstacle_clearance_m
+                        <= config.GUIDANCE_ALIGNMENT_HOLD_DISTANCE_M
+                )
+        )
+
+        if requires_alignment_hold:
             self.vessel.speed_mps = 0.0
         else:
             self.vessel.speed_mps = calculate_guidance_speed(

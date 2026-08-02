@@ -1035,5 +1035,36 @@ class TestSimulation(unittest.TestCase):
             [(10.0, 0.0)],
         )
 
+    def test_moves_while_aligning_to_distant_destination(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 0.0
+        simulation.destination_x_m = 100.0
+        simulation.destination_y_m = 0.0
+        simulation.obstacles = []
+        simulation.route_waypoints = []
+
+        simulation.update(0.05)
+
+        distance_moved_m = calculate_distance(
+            0.0,
+            0.0,
+            simulation.vessel.x_m,
+            simulation.vessel.y_m,
+        )
+
+        self.assertGreater(
+            simulation.vessel.speed_mps,
+            0.0,
+        )
+        self.assertGreater(distance_moved_m, 0.0)
+        self.assertAlmostEqual(
+            simulation.vessel.heading_deg,
+            1.0,
+        )
+
 if __name__ == "__main__":
     unittest.main()
