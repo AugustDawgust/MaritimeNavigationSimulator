@@ -59,7 +59,10 @@ class TestSimulation(unittest.TestCase):
             simulation.vessel.speed_mps,
             config.INITIAL_VESSEL_SPEED_MPS,
         )
-    def test_creates_waypoint_for_blocking_obstacle(self) -> None:
+
+    def test_update_plans_route_around_blocking_obstacle(
+            self,
+    ) -> None:
         simulation = Simulation()
         simulation.vessel.x_m = 0.0
         simulation.vessel.y_m = 0.0
@@ -72,41 +75,40 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             )
         ]
+        simulation.route_waypoints = []
 
         simulation.update(0.0)
 
-        self.assertIsNotNone(simulation.avoidance_waypoint)
-        self.assertFalse(simulation.collided)
+        self.assertGreater(
+            len(simulation.route_waypoints),
+            1,
+        )
+        self.assertEqual(
+            simulation.route_waypoints[-1],
+            (100.0, 0.0),
+        )
+        self.assertFalse(simulation.navigation_blocked)
+        self.assertIsNone(simulation.avoidance_waypoint)
 
-    def test_does_not_create_waypoint_for_clear_route(self) -> None:
+    def test_update_plans_direct_route_when_clear(
+            self,
+    ) -> None:
         simulation = Simulation()
         simulation.vessel.x_m = 0.0
         simulation.vessel.y_m = 0.0
         simulation.destination_x_m = 100.0
         simulation.destination_y_m = 0.0
-        simulation.obstacles = [
-            Obstacle(
-                x_m=50.0,
-                y_m=30.0,
-                radius_m=5.0,
-            )
-        ]
-
-        simulation.update(0.0)
-
-        self.assertIsNone(simulation.avoidance_waypoint)
-
-    def test_clears_reached_avoidance_waypoint(self) -> None:
-        simulation = Simulation()
         simulation.obstacles = []
-        simulation.avoidance_waypoint = (
-            simulation.vessel.x_m,
-            simulation.vessel.y_m,
-        )
+        simulation.route_waypoints = []
 
         simulation.update(0.0)
 
-        self.assertIsNone(simulation.avoidance_waypoint)
+        self.assertEqual(
+            simulation.route_waypoints,
+            [(100.0, 0.0)],
+        )
+        self.assertFalse(simulation.navigation_blocked)
+
     def test_navigates_around_obstacle_and_arrives(self) -> None:
         simulation = Simulation()
         simulation.vessel.x_m = 0.0
@@ -156,22 +158,24 @@ class TestSimulation(unittest.TestCase):
             ),
         ]
         simulation.avoidance_waypoint = None
+        simulation.route_waypoints = []
         simulation.trail_points = [(0.0, 0.0)]
 
-        avoidance_was_used = False
+        self.assertTrue(simulation.plan_route())
+        self.assertGreater(
+            len(simulation.route_waypoints),
+            1,
+        )
 
         for _ in range(2500):
             simulation.update(0.05)
 
-            if simulation.avoidance_waypoint is not None:
-                avoidance_was_used = True
-
             if simulation.arrived or simulation.collided:
                 break
 
-        self.assertTrue(avoidance_was_used)
         self.assertTrue(simulation.arrived)
         self.assertFalse(simulation.collided)
+        self.assertFalse(simulation.navigation_blocked)
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
 
     def test_navigates_around_staggered_obstacles_and_arrives(
@@ -196,55 +200,25 @@ class TestSimulation(unittest.TestCase):
             ),
         ]
         simulation.avoidance_waypoint = None
+        simulation.route_waypoints = []
         simulation.trail_points = [(0.0, 0.0)]
 
-        avoidance_targets_used: set[
-            tuple[float, float]
-        ] = set()
+        self.assertTrue(simulation.plan_route())
+        self.assertGreater(
+            len(simulation.route_waypoints),
+            1,
+        )
 
         for _ in range(4000):
             simulation.update(0.05)
 
-            if simulation.avoidance_waypoint is not None:
-                waypoint_x_m, waypoint_y_m = (
-                    simulation.avoidance_waypoint
-                )
-                avoidance_targets_used.add(
-                    (
-                        round(waypoint_x_m, 6),
-                        round(waypoint_y_m, 6),
-                    )
-                )
-
             if simulation.arrived or simulation.collided:
                 break
 
-        self.assertGreaterEqual(
-            len(avoidance_targets_used),
-            2,
-        )
         self.assertTrue(simulation.arrived)
         self.assertFalse(simulation.collided)
+        self.assertFalse(simulation.navigation_blocked)
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
-
-    def test_resumes_destination_navigation_after_waypoint(
-        self,
-    ) -> None:
-        simulation = Simulation()
-        simulation.vessel.x_m = 0.0
-        simulation.vessel.y_m = 0.0
-        simulation.vessel.heading_deg = 90.0
-        simulation.destination_x_m = 100.0
-        simulation.destination_y_m = 0.0
-        simulation.obstacles = []
-        simulation.avoidance_waypoint = (0.0, 0.0)
-        simulation.trail_points = [(0.0, 0.0)]
-
-        simulation.update(0.1)
-
-        self.assertIsNone(simulation.avoidance_waypoint)
-        self.assertGreater(simulation.vessel.x_m, 0.0)
-        self.assertAlmostEqual(simulation.vessel.y_m, 0.0)
 
     def test_tracks_metrics_during_vessel_movement(self) -> None:
         simulation = Simulation()
@@ -417,129 +391,31 @@ class TestSimulation(unittest.TestCase):
             ),
         )
 
-    def test_avoidance_waypoint_becomes_active_target(
-            self,
-    ) -> None:
-        simulation = Simulation()
-
-        original_destination = (
-            simulation.destination_x_m,
-            simulation.destination_y_m,
-        )
-
-        simulation.avoidance_waypoint = (25.0, 30.0)
-
-        self.assertEqual(
-            simulation.active_target,
-            (25.0, 30.0),
-        )
-
-        self.assertEqual(
-            (
-                simulation.destination_x_m,
-                simulation.destination_y_m,
-            ),
-            original_destination,
-        )
-
-    def test_selects_opposite_side_when_preferred_side_is_unsafe(
+    def test_update_stops_when_global_route_cannot_be_planned(
             self,
     ) -> None:
         simulation = Simulation()
         simulation.vessel.x_m = 0.0
         simulation.vessel.y_m = 0.0
-        simulation.vessel.heading_deg = 90.0
-        simulation.destination_x_m = 100.0
+        simulation.destination_x_m = 20.0
         simulation.destination_y_m = 0.0
-
-        blocking_obstacle = Obstacle(
-            x_m=50.0,
-            y_m=0.0,
-            radius_m=5.0,
-        )
-
-        waypoint_offset_m = (
-                blocking_obstacle.radius_m
-                + config.AVOIDANCE_CLEARANCE_M
-                + config.AVOIDANCE_EXTRA_OFFSET_M
-        )
-
         simulation.obstacles = [
-            blocking_obstacle,
             Obstacle(
-                x_m=50.0,
-                y_m=waypoint_offset_m,
-                radius_m=1.0,
-            ),
+                x_m=20.0,
+                y_m=0.0,
+                radius_m=5.0,
+            )
         ]
+        simulation.route_waypoints = []
 
-        simulation.avoidance_waypoint = None
-        simulation.update(0.05)
-
-        self.assertIsNotNone(simulation.avoidance_waypoint)
-
-        waypoint_x_m, waypoint_y_m = (
-            simulation.avoidance_waypoint
-        )
-
-        self.assertLess(waypoint_y_m, 0.0)
-        self.assertFalse(simulation.navigation_blocked)
-
-    def test_stops_when_neither_avoidance_side_is_safe(
-            self,
-    ) -> None:
-        simulation = Simulation()
-        simulation.vessel.x_m = 0.0
-        simulation.vessel.y_m = 0.0
-        simulation.vessel.heading_deg = 90.0
-        simulation.destination_x_m = 100.0
-        simulation.destination_y_m = 0.0
-
-        original_destination = (
-            simulation.destination_x_m,
-            simulation.destination_y_m,
-        )
-
-        blocking_obstacle = Obstacle(
-            x_m=50.0,
-            y_m=0.0,
-            radius_m=5.0,
-        )
-
-        waypoint_offset_m = (
-                blocking_obstacle.radius_m
-                + config.AVOIDANCE_CLEARANCE_M
-                + config.AVOIDANCE_EXTRA_OFFSET_M
-        )
-
-        simulation.obstacles = [
-            blocking_obstacle,
-            Obstacle(
-                x_m=50.0,
-                y_m=waypoint_offset_m,
-                radius_m=1.0,
-            ),
-            Obstacle(
-                x_m=50.0,
-                y_m=-waypoint_offset_m,
-                radius_m=1.0,
-            ),
-        ]
-
-        simulation.avoidance_waypoint = None
         simulation.update(0.05)
 
         self.assertTrue(simulation.navigation_blocked)
-        self.assertIsNone(simulation.avoidance_waypoint)
+        self.assertFalse(simulation.arrived)
         self.assertFalse(simulation.collided)
+        self.assertEqual(simulation.route_waypoints, [])
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
-        self.assertEqual(
-            (
-                simulation.destination_x_m,
-                simulation.destination_y_m,
-            ),
-            original_destination,
-        )
+
     def test_set_destination_resets_mission(self) -> None:
         simulation = Simulation()
 
@@ -839,24 +715,7 @@ class TestSimulation(unittest.TestCase):
         self.assertFalse(simulation.navigation_blocked)
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
 
-    def test_passed_avoidance_waypoint_is_cleared(
-            self,
-    ) -> None:
-        simulation = Simulation()
-        simulation.vessel.x_m = 22.0
-        simulation.vessel.y_m = 10.0
-        simulation.destination_x_m = 100.0
-        simulation.destination_y_m = 10.0
-        simulation.obstacles = []
-        simulation.avoidance_waypoint = (20.0, 10.0)
-        simulation.trail_points = [(22.0, 10.0)]
-
-        simulation.update(0.05)
-
-        self.assertIsNone(simulation.avoidance_waypoint)
-        self.assertFalse(simulation.navigation_blocked)
-
-    def test_replaces_waypoint_when_route_to_it_becomes_blocked(
+    def test_global_route_reaches_offset_destination(
             self,
     ) -> None:
         simulation = Simulation()
@@ -872,38 +731,10 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             )
         ]
-        simulation.avoidance_waypoint = (100.0, 0.0)
+
         simulation.trail_points = [(0.0, 0.0)]
 
-        original_waypoint = simulation.avoidance_waypoint
-
-        simulation.update(0.05)
-
-        self.assertIsNotNone(simulation.avoidance_waypoint)
-        self.assertNotEqual(
-            simulation.avoidance_waypoint,
-            original_waypoint,
-        )
-        self.assertFalse(simulation.navigation_blocked)
-        self.assertFalse(simulation.collided)
-    def test_replanned_waypoint_route_reaches_destination(
-            self,
-    ) -> None:
-        simulation = Simulation()
-        simulation.vessel.x_m = 0.0
-        simulation.vessel.y_m = 0.0
-        simulation.vessel.heading_deg = 90.0
-        simulation.destination_x_m = 120.0
-        simulation.destination_y_m = 40.0
-        simulation.obstacles = [
-            Obstacle(
-                x_m=40.0,
-                y_m=0.0,
-                radius_m=5.0,
-            )
-        ]
-        simulation.avoidance_waypoint = (100.0, 0.0)
-        simulation.trail_points = [(0.0, 0.0)]
+        self.assertTrue(simulation.plan_route())
 
         for _ in range(4000):
             simulation.update(0.05)
@@ -918,64 +749,7 @@ class TestSimulation(unittest.TestCase):
         self.assertTrue(simulation.arrived)
         self.assertFalse(simulation.collided)
         self.assertFalse(simulation.navigation_blocked)
-        self.assertIsNone(simulation.avoidance_waypoint)
         self.assertEqual(simulation.vessel.speed_mps, 0.0)
-    def test_stops_when_blocked_waypoint_cannot_be_replanned(
-            self,
-    ) -> None:
-        simulation = Simulation()
-        simulation.vessel.x_m = 0.0
-        simulation.vessel.y_m = 0.0
-        simulation.vessel.heading_deg = 90.0
-        simulation.destination_x_m = 120.0
-        simulation.destination_y_m = 40.0
-        simulation.avoidance_waypoint = (100.0, 0.0)
-        simulation.trail_points = [(0.0, 0.0)]
-
-        blocking_obstacle = Obstacle(
-            x_m=40.0,
-            y_m=0.0,
-            radius_m=5.0,
-        )
-
-        waypoint_offset_m = (
-            blocking_obstacle.radius_m
-            + config.AVOIDANCE_CLEARANCE_M
-            + config.AVOIDANCE_EXTRA_OFFSET_M
-        )
-
-        simulation.obstacles = [
-            blocking_obstacle,
-            Obstacle(
-                x_m=40.0,
-                y_m=waypoint_offset_m,
-                radius_m=1.0,
-            ),
-            Obstacle(
-                x_m=40.0,
-                y_m=-waypoint_offset_m,
-                radius_m=1.0,
-            ),
-        ]
-
-        original_destination = (
-            simulation.destination_x_m,
-            simulation.destination_y_m,
-        )
-
-        simulation.update(0.05)
-
-        self.assertTrue(simulation.navigation_blocked)
-        self.assertFalse(simulation.arrived)
-        self.assertFalse(simulation.collided)
-        self.assertEqual(simulation.vessel.speed_mps, 0.0)
-        self.assertEqual(
-            (
-                simulation.destination_x_m,
-                simulation.destination_y_m,
-            ),
-            original_destination,
-        )
 
     def test_destination_at_collision_boundary_is_invalid(
             self,
