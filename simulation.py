@@ -49,7 +49,6 @@ class Simulation:
             for x_m, y_m, radius_m in config.OBSTACLES
         ]
         self.scenario_seed: int | None = None
-        self.avoidance_waypoint: tuple[float, float] | None = None
 
         self.trail_points = [
             (self.vessel.x_m, self.vessel.y_m)
@@ -88,7 +87,7 @@ class Simulation:
 
             required_clearance_m = (
                 obstacle.radius_m
-                + config.AVOIDANCE_CLEARANCE_M
+                + config.ROUTE_CLEARANCE_M
             )
 
             if distance_to_obstacle_m <= required_clearance_m:
@@ -113,7 +112,6 @@ class Simulation:
         self.arrived = False
         self.collided = False
         self.navigation_blocked = False
-        self.avoidance_waypoint = None
 
         self.vessel.speed_mps = config.INITIAL_VESSEL_SPEED_MPS
 
@@ -133,7 +131,6 @@ class Simulation:
             ),
         )
         self.route_waypoints = []
-        self.avoidance_waypoint = None
 
         return self.plan_route()
     def reset_scenario(self, seed: int) -> None:
@@ -188,7 +185,6 @@ class Simulation:
         self.arrived = False
         self.collided = False
         self.navigation_blocked = False
-        self.avoidance_waypoint = None
 
         self.obstacles = new_obstacles
         self.scenario_seed = seed
@@ -209,7 +205,6 @@ class Simulation:
             ),
         )
     def plan_route(self) -> bool:
-        self.avoidance_waypoint = None
 
         planned_route = find_route(
             start=(
@@ -221,7 +216,7 @@ class Simulation:
                 self.destination_y_m,
             ),
             obstacles=self.obstacles,
-            clearance_m=config.AVOIDANCE_CLEARANCE_M,
+            clearance_m=config.ROUTE_CLEARANCE_M,
         )
 
         if planned_route is None:

@@ -31,14 +31,12 @@ class Renderer:
             trail_points: list[tuple[float, float]],
             distance_to_destination_m: float,
             obstacles: list[Obstacle],
-            avoidance_waypoint: tuple[float, float] | None,
             metrics: MissionMetrics,
     ) -> None:
         self.screen.fill(config.BACKGROUND_COLOR)
 
         self._draw_trail(trail_points)
         self._draw_obstacles(obstacles)
-        self._draw_avoidance_waypoint(avoidance_waypoint)
 
         self._draw_destination(
             destination_x_m,
@@ -54,7 +52,6 @@ class Renderer:
             collided,
             navigation_blocked,
             invalid_destination,
-            avoidance_waypoint,
             metrics,
         )
 
@@ -68,7 +65,6 @@ class Renderer:
             collided: bool,
             navigation_blocked: bool,
             invalid_destination: bool,
-            avoidance_waypoint: tuple[float, float] | None,
             metrics: MissionMetrics,
     ) -> None:
         panel_rect = pygame.Rect(
@@ -99,9 +95,6 @@ class Renderer:
         elif navigation_blocked:
             status_text = "NAVIGATION BLOCKED"
             status_color = config.STATUS_BLOCKED_COLOR
-        elif avoidance_waypoint is not None:
-            status_text = "AVOIDING"
-            status_color = config.STATUS_AVOIDING_COLOR
         else:
             status_text = "NAVIGATING"
             status_color = config.STATUS_TEXT_COLOR
@@ -223,31 +216,7 @@ class Renderer:
             screen_points,
             config.TRAIL_WIDTH_PX,
         )
-    def _draw_avoidance_waypoint(
-        self,
-        avoidance_waypoint: tuple[float, float] | None,
-    ) -> None:
-        if avoidance_waypoint is None:
-            return
 
-        screen_position = self._world_to_screen(
-            avoidance_waypoint[0],
-            avoidance_waypoint[1],
-        )
-
-        pygame.draw.circle(
-            self.screen,
-            config.AVOIDANCE_WAYPOINT_COLOR,
-            screen_position,
-            config.AVOIDANCE_WAYPOINT_SIZE_PX,
-        )
-        pygame.draw.circle(
-            self.screen,
-            config.AVOIDANCE_WAYPOINT_OUTLINE_COLOR,
-            screen_position,
-            config.AVOIDANCE_WAYPOINT_SIZE_PX,
-            2,
-        )
     def _draw_obstacles(
         self,
         obstacles: list[Obstacle],

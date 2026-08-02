@@ -34,8 +34,7 @@ Version 0.9 includes:
 * Automatic recovery from arrival, collision, and blocked-navigation states when a new destination is selected
 * Mission-metric and route-trail resetting for each new destination
 * Screen-to-world coordinate conversion for mouse input
-* Visible avoidance waypoint
-* Live `NAVIGATING`, `AVOIDING`, `ARRIVED`, `COLLISION`, and `NAVIGATION BLOCKED` status
+* Live `NAVIGATING`, `ARRIVED`, `COLLISION`, and `NAVIGATION BLOCKED` status
 * Destination, obstacle, route-trail, and status visualization
 * Live heading, speed, and distance display
 * Live mission elapsed-time tracking

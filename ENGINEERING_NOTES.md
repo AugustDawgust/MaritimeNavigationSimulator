@@ -142,7 +142,9 @@ The vessel then:
 4. Generates another waypoint if an obstacle still blocks the route.
 5. Resumes destination navigation when the route is clear.
 
-While a temporary waypoint is active, the status panel displays `AVOIDING`.
+The global route planner constructs a complete collision-free route before navigation begins. It uses obstacle-clearance geometry and selects a route from the vessel’s current position to the destination. The vessel then follows the resulting waypoint sequence in order.
+
+If no safe route can be found, the vessel stops and enters the `NAVIGATION BLOCKED` state.
 
 This reactive process has been validated with both aligned and staggered multiple-obstacle scenarios.
 
@@ -178,7 +180,6 @@ The status panel prioritizes terminal and navigation states in this order:
 1. `COLLISION`
 2. `ARRIVED`
 3. `NAVIGATION BLOCKED`
-4. `AVOIDING`
 5. `NAVIGATING`
 
 All three terminal states can be cleared by selecting a new destination.

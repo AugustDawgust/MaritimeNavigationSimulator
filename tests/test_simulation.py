@@ -88,7 +88,6 @@ class TestSimulation(unittest.TestCase):
             (100.0, 0.0),
         )
         self.assertFalse(simulation.navigation_blocked)
-        self.assertIsNone(simulation.avoidance_waypoint)
 
     def test_update_plans_direct_route_when_clear(
             self,
@@ -123,7 +122,6 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             )
         ]
-        simulation.avoidance_waypoint = None
         simulation.trail_points = [(0.0, 0.0)]
 
         for _ in range(2000):
@@ -157,7 +155,6 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             ),
         ]
-        simulation.avoidance_waypoint = None
         simulation.route_waypoints = []
         simulation.trail_points = [(0.0, 0.0)]
 
@@ -199,7 +196,6 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             ),
         ]
-        simulation.avoidance_waypoint = None
         simulation.route_waypoints = []
         simulation.trail_points = [(0.0, 0.0)]
 
@@ -311,7 +307,6 @@ class TestSimulation(unittest.TestCase):
                 radius_m=5.0,
             )
         ]
-        simulation.avoidance_waypoint = None
         simulation.trail_points = [(0.0, 0.0)]
 
         expected_route_distance_m = 0.0
@@ -427,7 +422,6 @@ class TestSimulation(unittest.TestCase):
         simulation.arrived = True
         simulation.collided = True
         simulation.navigation_blocked = True
-        simulation.avoidance_waypoint = (40.0, 50.0)
         simulation.trail_points = [
             (0.0, 0.0),
             (12.0, 18.0),
@@ -457,7 +451,6 @@ class TestSimulation(unittest.TestCase):
         self.assertFalse(simulation.arrived)
         self.assertFalse(simulation.collided)
         self.assertFalse(simulation.navigation_blocked)
-        self.assertIsNone(simulation.avoidance_waypoint)
 
         self.assertEqual(
             simulation.trail_points,
@@ -494,7 +487,7 @@ class TestSimulation(unittest.TestCase):
             20.0,
             30.0
             + 5.0
-            + config.AVOIDANCE_CLEARANCE_M
+            + config.ROUTE_CLEARANCE_M
             + 0.1,
         )
 
@@ -535,7 +528,7 @@ class TestSimulation(unittest.TestCase):
             20.0,
             30.0
             + 5.0
-            + config.AVOIDANCE_CLEARANCE_M,
+            + config.ROUTE_CLEARANCE_M,
         )
 
         self.assertFalse(is_valid)
@@ -552,7 +545,6 @@ class TestSimulation(unittest.TestCase):
             )
         ]
 
-        simulation.avoidance_waypoint = (30.0, 20.0)
         simulation.trail_points = [
             (0.0, 0.0),
             (8.0, 4.0),
@@ -568,7 +560,6 @@ class TestSimulation(unittest.TestCase):
             simulation.destination_y_m,
         )
         original_speed_mps = simulation.vessel.speed_mps
-        original_waypoint = simulation.avoidance_waypoint
         original_trail = simulation.trail_points.copy()
         original_metrics = simulation.metrics
 
@@ -588,10 +579,6 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(
             simulation.vessel.speed_mps,
             original_speed_mps,
-        )
-        self.assertEqual(
-            simulation.avoidance_waypoint,
-            original_waypoint,
         )
         self.assertEqual(
             simulation.trail_points,
@@ -638,7 +625,6 @@ class TestSimulation(unittest.TestCase):
         simulation.arrived = True
         simulation.collided = True
         simulation.navigation_blocked = True
-        simulation.avoidance_waypoint = (10.0, 15.0)
         simulation.trail_points = [
             (0.0, 0.0),
             (30.0, 20.0),
@@ -675,7 +661,6 @@ class TestSimulation(unittest.TestCase):
         self.assertFalse(simulation.arrived)
         self.assertFalse(simulation.collided)
         self.assertFalse(simulation.navigation_blocked)
-        self.assertIsNone(simulation.avoidance_waypoint)
         self.assertEqual(
             simulation.trail_points,
             [
@@ -701,7 +686,6 @@ class TestSimulation(unittest.TestCase):
         simulation.destination_x_m = -10.0
         simulation.destination_y_m = -10.0
         simulation.obstacles = []
-        simulation.avoidance_waypoint = None
         simulation.trail_points = [(0.0, 0.0)]
 
         for _ in range(1000):
@@ -854,7 +838,6 @@ class TestSimulation(unittest.TestCase):
         simulation = Simulation()
         simulation.destination_x_m = 100.0
         simulation.destination_y_m = 0.0
-        simulation.avoidance_waypoint = None
         simulation.route_waypoints = [
             (30.0, 20.0),
             (70.0, 20.0),
@@ -873,7 +856,6 @@ class TestSimulation(unittest.TestCase):
         simulation.vessel.y_m = 20.0
         simulation.destination_x_m = 100.0
         simulation.destination_y_m = 0.0
-        simulation.avoidance_waypoint = None
         simulation.obstacles = []
         simulation.route_waypoints = [
             (30.0, 20.0),
