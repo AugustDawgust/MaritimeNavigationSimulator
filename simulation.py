@@ -7,6 +7,7 @@ from navigation import (
     calculate_distance,
     calculate_guidance_speed,
     turn_toward_heading,
+    calculate_heading_error,
 )
 from obstacle import Obstacle
 from vessel import Vessel
@@ -241,7 +242,7 @@ class Simulation:
 
             if (
                     distance_to_waypoint_m
-                    > config.ARRIVAL_RADIUS_M
+                    > config.ROUTE_WAYPOINT_RADIUS_M
             ):
                 break
 
@@ -292,26 +293,41 @@ class Simulation:
             target_y_m,
         )
 
-        self.vessel.speed_mps = calculate_guidance_speed(
-            current_heading_deg=self.vessel.heading_deg,
-            desired_heading_deg=desired_heading_deg,
-            distance_to_target_m=distance_to_active_target_m,
-            cruise_speed_mps=(
-                config.INITIAL_VESSEL_SPEED_MPS
-            ),
-            max_turn_rate_deg_s=(
-                config.MAX_TURN_RATE_DEG_S
-            ),
-            minimum_speed_mps=(
-                config.MIN_GUIDANCE_SPEED_MPS
-            ),
-            turn_radius_factor=(
-                config.GUIDANCE_TURN_RADIUS_FACTOR
-            ),
-            minimum_turn_demand=(
-                config.GUIDANCE_MIN_TURN_DEMAND
-            ),
+        heading_error_deg = abs(
+            calculate_heading_error(
+                self.vessel.heading_deg,
+                desired_heading_deg,
+            )
         )
+
+        if (
+                heading_error_deg
+                > config.GUIDANCE_ALIGNMENT_TOLERANCE_DEG
+        ):
+            self.vessel.speed_mps = 0.0
+        else:
+            self.vessel.speed_mps = calculate_guidance_speed(
+                current_heading_deg=self.vessel.heading_deg,
+                desired_heading_deg=desired_heading_deg,
+                distance_to_target_m=(
+                    distance_to_active_target_m
+                ),
+                cruise_speed_mps=(
+                    config.INITIAL_VESSEL_SPEED_MPS
+                ),
+                max_turn_rate_deg_s=(
+                    config.MAX_TURN_RATE_DEG_S
+                ),
+                minimum_speed_mps=(
+                    config.MIN_GUIDANCE_SPEED_MPS
+                ),
+                turn_radius_factor=(
+                    config.GUIDANCE_TURN_RADIUS_FACTOR
+                ),
+                minimum_turn_demand=(
+                    config.GUIDANCE_MIN_TURN_DEMAND
+                ),
+            )
 
         self.vessel.heading_deg = turn_toward_heading(
             self.vessel.heading_deg,

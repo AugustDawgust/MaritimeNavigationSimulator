@@ -2,7 +2,10 @@ import unittest
 
 from obstacle import Obstacle
 from simulation import Simulation
-from navigation import calculate_distance
+from navigation import (
+    calculate_desired_heading,
+    calculate_distance,
+)
 import config
 
 
@@ -51,6 +54,13 @@ class TestSimulation(unittest.TestCase):
     def test_no_collision_when_obstacle_list_is_empty(self) -> None:
         simulation = Simulation()
         simulation.obstacles = []
+
+        simulation.vessel.heading_deg = calculate_desired_heading(
+            simulation.vessel.x_m,
+            simulation.vessel.y_m,
+            simulation.destination_x_m,
+            simulation.destination_y_m,
+        )
 
         simulation.update(1.0)
 
@@ -223,6 +233,13 @@ class TestSimulation(unittest.TestCase):
         initial_x_m = simulation.vessel.x_m
         initial_y_m = simulation.vessel.y_m
         initial_speed_mps = simulation.vessel.speed_mps
+
+        simulation.vessel.heading_deg = calculate_desired_heading(
+            simulation.vessel.x_m,
+            simulation.vessel.y_m,
+            simulation.destination_x_m,
+            simulation.destination_y_m,
+        )
 
         simulation.update(1.0)
 
@@ -940,6 +957,82 @@ class TestSimulation(unittest.TestCase):
         self.assertEqual(
             simulation.route_waypoints,
             [],
+        )
+
+    def test_aligns_before_moving_with_obstacle_ahead(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.vessel.heading_deg = 0.0
+        simulation.destination_x_m = 100.0
+        simulation.destination_y_m = 0.0
+        simulation.obstacles = [
+            Obstacle(
+                x_m=0.0,
+                y_m=15.0,
+                radius_m=2.0,
+            )
+        ]
+        simulation.route_waypoints = []
+
+        simulation.update(0.05)
+
+        self.assertAlmostEqual(
+            simulation.vessel.x_m,
+            0.0,
+        )
+        self.assertAlmostEqual(
+            simulation.vessel.y_m,
+            0.0,
+        )
+        self.assertAlmostEqual(
+            simulation.vessel.heading_deg,
+            1.0,
+        )
+        self.assertEqual(
+            simulation.vessel.speed_mps,
+            0.0,
+        )
+        self.assertFalse(simulation.collided)
+
+        for _ in range(3000):
+            simulation.update(0.05)
+
+            if simulation.arrived or simulation.collided:
+                break
+
+        self.assertTrue(simulation.arrived)
+        self.assertFalse(simulation.collided)
+
+    def test_does_not_advance_intermediate_waypoint_early(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.vessel.x_m = 0.0
+        simulation.vessel.y_m = 0.0
+        simulation.route_waypoints = [
+            (1.0, 0.0),
+            (10.0, 0.0),
+        ]
+
+        simulation._advance_reached_route_waypoints()
+
+        self.assertEqual(
+            simulation.route_waypoints,
+            [
+                (1.0, 0.0),
+                (10.0, 0.0),
+            ],
+        )
+
+        simulation.vessel.x_m = 0.6
+        simulation._advance_reached_route_waypoints()
+
+        self.assertEqual(
+            simulation.route_waypoints,
+            [(10.0, 0.0)],
         )
 
 if __name__ == "__main__":
