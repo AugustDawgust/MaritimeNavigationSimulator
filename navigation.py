@@ -139,3 +139,23 @@ def has_reached_or_passed_waypoint(
     )
 
     return onward_progress_m2 > 0.0
+
+def limit_speed_change(
+        current_speed_mps: float,
+        desired_speed_mps: float,
+        max_acceleration_mps2: float,
+        max_deceleration_mps2: float,
+        dt_s: float,
+) -> float:
+    if desired_speed_mps >= current_speed_mps:
+        return min(
+            desired_speed_mps,
+            current_speed_mps
+            + max_acceleration_mps2 * dt_s,
+        )
+
+    return max(
+        desired_speed_mps,
+        current_speed_mps
+        - max_deceleration_mps2 * dt_s,
+    )

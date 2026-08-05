@@ -6,7 +6,7 @@ from collision import (
 )
 from obstacle import Obstacle
 from vessel import Vessel
-
+import config
 
 class TestCollision(unittest.TestCase):
     def setUp(self) -> None:
@@ -19,15 +19,17 @@ class TestCollision(unittest.TestCase):
 
     def test_detects_overlapping_boundaries(self) -> None:
         obstacle = Obstacle(
-            x_m=8.0,
-            y_m=0.0,
+            x_m=0.0,
+            y_m=8.0,
             radius_m=3.0,
         )
 
         self.assertTrue(
             vessel_collides_with_obstacle(
                 self.vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacle=obstacle,
             )
         )
@@ -42,22 +44,26 @@ class TestCollision(unittest.TestCase):
         self.assertFalse(
             vessel_collides_with_obstacle(
                 self.vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacle=obstacle,
             )
         )
 
     def test_touching_boundaries_count_as_collision(self) -> None:
         obstacle = Obstacle(
-            x_m=9.0,
-            y_m=0.0,
+            x_m=0.0,
+            y_m=9.0,
             radius_m=3.0,
         )
 
         self.assertTrue(
             vessel_collides_with_obstacle(
                 self.vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacle=obstacle,
             )
         )
@@ -65,14 +71,16 @@ class TestCollision(unittest.TestCase):
     def test_detects_collision_in_obstacle_list(self) -> None:
         obstacles = [
             Obstacle(x_m=20.0, y_m=0.0, radius_m=3.0),
-            Obstacle(x_m=8.0, y_m=0.0, radius_m=3.0),
+            Obstacle(x_m=0.0, y_m=8.0, radius_m=3.0),
             Obstacle(x_m=-20.0, y_m=0.0, radius_m=3.0),
         ]
 
         self.assertTrue(
             vessel_collides_with_any_obstacle(
                 self.vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacles=obstacles,
             )
         )
@@ -81,12 +89,14 @@ class TestCollision(unittest.TestCase):
         self.assertFalse(
             vessel_collides_with_any_obstacle(
                 self.vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacles=[],
             )
         )
 
-    def test_collision_occurs_exactly_at_combined_radius(
+    def test_collision_occurs_exactly_at_bow_contact(
             self,
     ) -> None:
         vessel = Vessel(
@@ -96,20 +106,22 @@ class TestCollision(unittest.TestCase):
             speed_mps=0.0,
         )
         obstacle = Obstacle(
-            x_m=11.0,
-            y_m=0.0,
+            x_m=0.0,
+            y_m=11.0,
             radius_m=5.0,
         )
 
         self.assertTrue(
             vessel_collides_with_obstacle(
                 vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacle=obstacle,
             )
         )
 
-    def test_no_collision_immediately_outside_combined_radius(
+    def test_no_collision_immediately_beyond_bow_contact(
             self,
     ) -> None:
         vessel = Vessel(
@@ -119,15 +131,17 @@ class TestCollision(unittest.TestCase):
             speed_mps=0.0,
         )
         obstacle = Obstacle(
-            x_m=11.000001,
-            y_m=0.0,
+            x_m=0.0,
+            y_m=11.000001,
             radius_m=5.0,
         )
 
         self.assertFalse(
             vessel_collides_with_obstacle(
                 vessel,
-                vessel_collision_radius_m=6.0,
+                vessel_bounding_radius_m=(
+                    config.VESSEL_BOUNDING_RADIUS_M
+                ),
                 obstacle=obstacle,
             )
         )

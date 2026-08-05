@@ -8,6 +8,7 @@ from navigation import (
     calculate_guidance_speed,
     turn_toward_heading,
     calculate_heading_error,
+    limit_speed_change,
 )
 from obstacle import Obstacle
 from vessel import Vessel
@@ -256,7 +257,7 @@ class Simulation:
 
         if vessel_collides_with_any_obstacle(
                 self.vessel,
-                config.VESSEL_COLLISION_RADIUS_M,
+                config.VESSEL_BOUNDING_RADIUS_M,
                 self.obstacles,
         ):
             self.collided = True
@@ -309,13 +310,13 @@ class Simulation:
                     obstacle.y_m,
                 )
                 - obstacle.radius_m
-                - config.VESSEL_COLLISION_RADIUS_M
+                - config.VESSEL_BOUNDING_RADIUS_M
                 for obstacle in self.obstacles
             ),
             default=float("inf"),
         )
 
-        requires_alignment_hold = (
+        requires_maneuvering_speed = (
                 heading_error_deg
                 > config.GUIDANCE_ALIGNMENT_TOLERANCE_DEG
                 and (
@@ -326,10 +327,10 @@ class Simulation:
                 )
         )
 
-        if requires_alignment_hold:
-            self.vessel.speed_mps = 0.0
+        if requires_maneuvering_speed:
+            desired_speed_mps = config.MIN_GUIDANCE_SPEED_MPS
         else:
-            self.vessel.speed_mps = calculate_guidance_speed(
+            desired_speed_mps = calculate_guidance_speed(
                 current_heading_deg=self.vessel.heading_deg,
                 desired_heading_deg=desired_heading_deg,
                 distance_to_target_m=(
@@ -351,6 +352,14 @@ class Simulation:
                     config.GUIDANCE_MIN_TURN_DEMAND
                 ),
             )
+
+        self.vessel.speed_mps = limit_speed_change(
+            current_speed_mps=self.vessel.speed_mps,
+            desired_speed_mps=desired_speed_mps,
+            max_acceleration_mps2=config.MAX_ACCELERATION_MPS2,
+            max_deceleration_mps2=config.MAX_DECELERATION_MPS2,
+            dt_s=dt_s,
+        )
 
         self.vessel.heading_deg = turn_toward_heading(
             self.vessel.heading_deg,
@@ -397,7 +406,7 @@ class Simulation:
 
         if vessel_collides_with_any_obstacle(
             self.vessel,
-            config.VESSEL_COLLISION_RADIUS_M,
+            config.VESSEL_BOUNDING_RADIUS_M,
             self.obstacles,
         ):
             self.collided = True

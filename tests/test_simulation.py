@@ -765,7 +765,7 @@ class TestSimulation(unittest.TestCase):
         ]
 
         required_clearance_m = (
-            5.0 + config.VESSEL_COLLISION_RADIUS_M
+            5.0 + config.VESSEL_BOUNDING_RADIUS_M
         )
 
         self.assertFalse(
@@ -790,7 +790,7 @@ class TestSimulation(unittest.TestCase):
         ]
 
         required_clearance_m = (
-            5.0 + config.VESSEL_COLLISION_RADIUS_M
+            5.0 + config.VESSEL_BOUNDING_RADIUS_M
         )
 
         self.assertTrue(
@@ -959,7 +959,7 @@ class TestSimulation(unittest.TestCase):
             [],
         )
 
-    def test_aligns_before_moving_with_obstacle_ahead(
+    def test_slows_while_turning_with_obstacle_ahead(
             self,
     ) -> None:
         simulation = Simulation()
@@ -971,7 +971,7 @@ class TestSimulation(unittest.TestCase):
         simulation.obstacles = [
             Obstacle(
                 x_m=0.0,
-                y_m=15.0,
+                y_m=30.0,
                 radius_m=2.0,
             )
         ]
@@ -979,21 +979,25 @@ class TestSimulation(unittest.TestCase):
 
         simulation.update(0.05)
 
-        self.assertAlmostEqual(
+        distance_moved_m = calculate_distance(
+            0.0,
+            0.0,
             simulation.vessel.x_m,
-            0.0,
-        )
-        self.assertAlmostEqual(
             simulation.vessel.y_m,
+        )
+
+        self.assertGreater(
+            simulation.vessel.speed_mps,
             0.0,
         )
+        self.assertLess(
+            simulation.vessel.speed_mps,
+            config.INITIAL_VESSEL_SPEED_MPS,
+        )
+        self.assertGreater(distance_moved_m, 0.0)
         self.assertAlmostEqual(
             simulation.vessel.heading_deg,
             1.0,
-        )
-        self.assertEqual(
-            simulation.vessel.speed_mps,
-            0.0,
         )
         self.assertFalse(simulation.collided)
 

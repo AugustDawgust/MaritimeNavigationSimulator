@@ -1,5 +1,3 @@
-import math
-
 import pygame
 
 import config
@@ -158,38 +156,14 @@ class Renderer:
             text_y += 26
 
     def _draw_vessel(self, vessel: Vessel) -> None:
-        heading_rad = math.radians(vessel.heading_deg)
-
-        forward_x = math.sin(heading_rad)
-        forward_y = math.cos(heading_rad)
-
-        right_x = math.cos(heading_rad)
-        right_y = -math.sin(heading_rad)
-
-        half_length = config.VESSEL_LENGTH_M / 2.0
-        half_beam = config.VESSEL_BEAM_M / 2.0
-
-        bow = (
-            vessel.x_m + forward_x * half_length,
-            vessel.y_m + forward_y * half_length,
-        )
-        stern_center = (
-            vessel.x_m - forward_x * half_length,
-            vessel.y_m - forward_y * half_length,
-        )
-        port_stern = (
-            stern_center[0] - right_x * half_beam,
-            stern_center[1] - right_y * half_beam,
-        )
-        starboard_stern = (
-            stern_center[0] + right_x * half_beam,
-            stern_center[1] + right_y * half_beam,
+        world_points = vessel.hull_vertices(
+            config.VESSEL_LENGTH_M,
+            config.VESSEL_BEAM_M,
         )
 
         screen_points = [
-            self._world_to_screen(*bow),
-            self._world_to_screen(*port_stern),
-            self._world_to_screen(*starboard_stern),
+            self._world_to_screen(x_m, y_m)
+            for x_m, y_m in world_points
         ]
 
         pygame.draw.polygon(
