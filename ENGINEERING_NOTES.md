@@ -1,69 +1,185 @@
 # Engineering Notes
 
+## Version 1.0 Scope
+
+The Autonomous Surface Vessel Navigation Simulator is a two-dimensional engineering simulation of a single autonomous vessel operating among static circular obstacles.
+
+Version 1.0 focuses on:
+
+* Frame-rate-independent vessel motion
+* Maritime heading conventions
+* Destination-based autonomous navigation
+* Turn-rate and speed-change limits
+* Reactive local obstacle avoidance
+* Safe failure when no local route is available
+* Matching rendered and collision hull geometry
+* Interactive mission control
+* Rolling route-history visualization
+* Mission-time, distance, and fuel-use estimates
+* Automated unit, integration, and end-to-end validation
+
+The simulator demonstrates navigation logic, simplified maneuverability, software architecture, and engineering verification. It is not a full hydrodynamic, propulsion, or marine-traffic simulation.
+
 ## Coordinate System
 
-The simulation uses real-world units:
+The simulation uses real-world units and a maritime coordinate convention:
 
 * Position is measured in meters.
 * Speed is measured in meters per second.
 * The positive x-axis points east.
 * The positive y-axis points north.
 * Heading is measured clockwise from north.
+* A heading of 0 degrees points north.
+* A heading of 90 degrees points east.
+* A heading of 180 degrees points south.
+* A heading of 270 degrees points west.
 
-This convention resembles maritime navigation rather than Pygame’s native screen-coordinate system.
+This differs from Pygame screen coordinates, whose origin is at the upper-left and whose positive y-axis points downward.
 
 ## Time Integration
 
-Vessel position is updated using the actual elapsed time between frames:
+Simulation updates use the elapsed time supplied to each update rather than assuming a fixed frame rate.
+
+For a vessel traveling at speed `v` for elapsed time `dt`:
 
 ```text
-position change = velocity × elapsed time
+distance traveled = v × dt
 ```
 
-This makes simulated speed independent of the rendering frame rate.
+Using maritime heading `ψ`, the position update is:
 
-## Vessel Model
+```text
+x change = sin(ψ) × v × dt
+y change = cos(ψ) × v × dt
+```
 
-The vessel is modeled as a point moving at a specified speed and heading. The rendered triangle represents its length, beam, and orientation but does not directly determine its dynamics or collision geometry.
+The trigonometric functions operate on the heading converted from degrees to radians.
 
-For collision detection, the vessel uses a conservative circular boundary centered on its position. The configured collision radius is large enough to approximately contain the rendered vessel.
+This method makes the simulated motion approximately independent of rendering frame rate. Small floating-point differences can still occur when the same total time is divided into different update sizes, especially during state transitions.
+
+## Vessel Geometry and Motion Model
+
+The vessel's dynamic state contains:
+
+* Center position
+* Heading
+* Forward speed
+
+Motion is kinematic. The model updates pose directly from heading and speed and does not calculate forces, moments, mass, inertia, rudder force, propeller thrust, or hydrodynamic resistance.
+
+The vessel is displayed and collision-tested as an oriented triangle based on the configured vessel length and beam. The triangle contains:
+
+* One bow vertex
+* One aft-port vertex
+* One aft-starboard vertex
+
+The triangle rotates with vessel heading and translates with vessel position. The vessel does not currently model reverse motion, lateral velocity, sideslip, or a physically derived turning radius.
+
+The current default vessel dimensions are:
+
+```text
+length = 12 m
+beam = 5 m
+```
 
 ## Waypoint Navigation
 
-The vessel autonomously navigates toward the currently selected final destination.
+The vessel navigates toward an active target. The active target is either:
 
-The desired heading is calculated from the vessel’s current position to the active target using the maritime heading convention. The active target is either:
+* The selected final destination
+* The next obstacle-avoidance waypoint
 
-* The final destination
-* A temporary obstacle-avoidance waypoint
+The desired maritime heading from the vessel to a target is calculated from the east and north position differences. The result is normalized to the range from 0 degrees up to, but not including, 360 degrees.
 
-The controller finds the shortest signed heading error so the vessel turns correctly across the 0-degree and 360-degree boundary.
+The heading controller calculates the shortest signed angular error between the current heading and desired heading. The error is normalized so the vessel does not make an unnecessarily long rotation across the 0-degree and 360-degree boundary.
 
-A positive heading error produces a clockwise turn, while a negative heading error produces a counterclockwise turn.
+* Positive heading error commands a clockwise turn.
+* Negative heading error commands a counterclockwise turn.
 
 ## Turn-Rate Limiting
 
-The vessel cannot change heading instantaneously. Its maximum heading change during one update is:
+The vessel cannot change heading instantaneously. The maximum permitted heading change during one update is:
 
 ```text
 maximum heading change = maximum turn rate × elapsed time
 ```
 
-If the remaining heading error is smaller than the permitted change, the vessel turns directly to the desired heading without overshooting it.
+The current default maximum turn rate is:
+
+```text
+20 degrees per second
+```
+
+If the remaining heading error is smaller than the permitted change, the controller sets the vessel directly to the desired heading without overshooting it.
+
+This model limits angular rate but does not model the hydrodynamic relationship between vessel speed, rudder angle, and turning radius.
+
+## Guidance-Speed Selection
+
+Version 1.0 allows the navigation system to request different target speeds rather than commanding the vessel to remain at one constant speed throughout every maneuver.
+
+The guidance-speed calculation considers navigation conditions such as:
+
+* Heading error
+* The need for a significant turn
+* Obstacle proximity or an obstructed route
+* Whether the vessel is actively maneuvering around an obstacle
+
+The configured normal operating speed is 8 m/s, and the configured minimum guidance speed is 1 m/s. The vessel therefore continues moving forward during normal avoidance turns instead of stopping and rotating in place.
+
+The guidance calculation requests a speed. A separate speed controller limits how quickly the vessel can reach that requested value.
+
+## Acceleration and Deceleration Limiting
+
+Actual vessel speed changes gradually.
+
+When the requested speed is greater than the current speed:
+
+```text
+maximum speed increase =
+    maximum acceleration × elapsed time
+```
+
+When the requested speed is lower than the current speed:
+
+```text
+maximum speed decrease =
+    maximum deceleration × elapsed time
+```
+
+The current default limits are:
+
+```text
+maximum acceleration = 2 m/s²
+maximum deceleration = 3 m/s²
+```
+
+The controller clamps the new speed so it cannot overshoot the requested speed.
+
+Under the default acceleration limit, increasing speed from 1 m/s to 8 m/s requires 3.5 simulated seconds. Under the default deceleration limit, reducing speed from 8 m/s to 1 m/s requires approximately 2.33 simulated seconds.
+
+These limits improve visual and physical plausibility, but they do not represent an engine, propeller, transmission, or force-based surge model.
 
 ## Arrival Detection
 
 The vessel is considered to have arrived when its straight-line distance from the final destination is less than or equal to the configured arrival radius.
 
+The current default arrival radius is:
+
+```text
+3 m
+```
+
 After arrival:
 
-* The arrival state becomes true.
+* `arrived` becomes true.
 * Vessel speed is set to zero.
-* Navigation and mission-metric updates stop.
-* The destination marker and status panel change appearance.
-* The status panel displays `ARRIVED`.
+* Navigation updates stop.
+* Mission metrics stop accumulating.
+* The interface displays `ARRIVED`.
+* Trail history continues to age and expire.
 
-A new destination can be selected after arrival to clear the arrival state and begin another mission.
+A valid new destination clears the arrival state and begins a new mission from the vessel's current pose.
 
 ## Obstacle Model
 
@@ -77,129 +193,127 @@ Each obstacle stores:
 
 Obstacle radii must be greater than zero. Attempting to create an obstacle with a zero or negative radius raises a `ValueError`.
 
-## Collision Detection
+The circular obstacle model simplifies geometric calculations and represents stationary hazards rather than specifically modeling buoys, vessels, islands, or shoreline boundaries.
 
-Both the vessel collision boundary and each obstacle are treated as circles.
+## Triangular-Hull Collision Detection
 
-A collision occurs when:
+Physical collision detection uses the vessel's oriented triangular hull and each obstacle's circular boundary.
+
+A vessel-obstacle collision exists if the obstacle circle overlaps or touches the triangle. The geometric test accounts for cases in which:
+
+* The obstacle center lies inside the vessel triangle.
+* The obstacle circle overlaps a triangle edge.
+* The obstacle circle touches a triangle edge or vertex.
+
+Touching boundaries count as a collision.
+
+The vessel is checked against every obstacle after movement. If a collision is detected:
+
+* `collided` becomes true.
+* Vessel speed is set to zero.
+* Future navigation and mission-metric updates stop.
+* The interface displays `COLLISION`.
+* Trail history continues to age and expire.
+
+This collision model matches the displayed hull more closely than the earlier circular approximation.
+
+Collision checks occur at discrete update times. A sufficiently large time step could allow the vessel to pass through an obstacle between checks. Normal real-time update sizes make this less likely, but swept or continuous collision detection would be required to eliminate the possibility.
+
+## Conservative Route-Clearance Geometry
+
+Collision detection and route planning intentionally use different geometric approximations.
+
+Physical collision checks use the triangular hull. Route-obstruction and waypoint-safety calculations use a conservative circular vessel envelope derived from vessel length and beam:
 
 ```text
-center distance ≤ vessel collision radius + obstacle radius
+bounding radius =
+    √[(vessel length / 2)² + (vessel beam / 2)²]
 ```
 
-Touching boundaries therefore count as a collision.
+For the default 12 m length and 5 m beam, the radius is 6.5 m.
 
-The simulation checks the vessel against every obstacle after each movement update. If any collision is detected:
-
-* The collision state becomes true.
-* Vessel speed is set to zero.
-* Future simulation and mission-metric updates stop.
-* The status panel displays `COLLISION`.
-
-A new destination can be selected after collision to clear the collision state and begin another mission from the vessel’s current position.
-
-Because collision detection occurs at discrete time steps, extremely large elapsed-time values could allow the vessel to move through an obstacle between checks. Normal frame times make this unlikely, but continuous collision detection could address this limitation in a future version.
+This circle contains the vessel's modeled extents and simplifies line-segment clearance calculations. It can produce more side clearance than the exact triangular hull requires, but that conservatism is appropriate for local route planning.
 
 ## Direct-Route Obstacle Detection
 
-Before navigating directly toward the final destination, the simulation checks whether any obstacle intersects the configured clearance area around the finite route segment.
+Before following a direct route, the simulator checks whether any obstacle intersects the required clearance area around the finite segment from the vessel to the target.
 
-Obstacles behind the vessel or beyond the destination are ignored.
+The test uses the nearest point on the finite route segment rather than an infinite line. Obstacles behind the vessel or beyond the route endpoint therefore do not block that particular segment.
 
-If multiple obstacles block the route, the nearest blocking obstacle is selected first. Distance is measured from the vessel’s current position to each blocking obstacle’s center.
+If multiple obstacles block the route, the nearest relevant blocking obstacle is handled first.
 
-After completing one avoidance maneuver, the vessel rechecks the direct route. This allows the reactive controller to make separate avoidance decisions for multiple aligned or staggered obstacles.
+After an avoidance waypoint is reached, the route is evaluated again. This allows the local controller to make successive decisions for aligned or staggered obstacles.
 
 ## Autonomous Obstacle Avoidance
 
-The simulator uses geometric temporary-waypoint navigation around static circular obstacles.
+The simulator uses geometric local waypoint generation around static circular obstacles.
 
-For the nearest blocking obstacle, the controller first generates a preferred avoidance waypoint perpendicular to the direct route. Its offset from the obstacle center is:
+For the nearest blocking obstacle, the route planner generates avoidance candidates on opposite sides of the obstacle. Candidate offset includes:
 
-```text
-waypoint offset =
-    obstacle radius
-    + avoidance clearance
-    + extra safety offset
-```
+* Obstacle radius
+* Vessel route-clearance allowance
+* Configured avoidance clearance
+* Additional safety offset
 
-The opposite-side candidate is created by reflecting the preferred waypoint across the obstacle’s center.
+The planner evaluates candidate safety against the complete obstacle collection. A candidate or approach segment is rejected when it violates the configured clearance around an obstacle.
 
-The controller evaluates the two candidates in this order:
+The planner evaluates the preferred side first and uses the opposite side when the preferred candidate is unsafe. Safe waypoints are stored in route order and followed sequentially.
 
-1. Preferred-side waypoint
-2. Opposite-side waypoint
+During avoidance, the vessel:
 
-A candidate is considered unsafe if the finite approach segment from the vessel to that waypoint intersects the configured clearance area around any obstacle.
+1. Follows the next planned avoidance waypoint.
+2. Uses turn-rate and speed-change limits while maneuvering.
+3. Advances the route after reaching an intermediate waypoint.
+4. Rechecks whether the destination route is clear.
+5. Generates or follows additional safe waypoints when needed.
+6. Resumes direct destination navigation when the route is clear.
 
-The controller selects the preferred candidate when it is safe. If the preferred candidate is unsafe, it uses the opposite candidate when available.
+The system has been validated with aligned and staggered multiple-obstacle layouts.
 
-The vessel then:
-
-1. Navigates toward the selected temporary waypoint.
-2. Clears the waypoint after entering its configured arrival radius.
-3. Rechecks the direct route to the final destination.
-4. Generates another waypoint if an obstacle still blocks the route.
-5. Resumes destination navigation when the route is clear.
-
-The global route planner constructs a complete collision-free route before navigation begins. It uses obstacle-clearance geometry and selects a route from the vessel’s current position to the destination. The vessel then follows the resulting waypoint sequence in order.
-
-If no safe route can be found, the vessel stops and enters the `NAVIGATION BLOCKED` state.
-
-This reactive process has been validated with both aligned and staggered multiple-obstacle scenarios.
+This is a reactive local planner, not a global shortest-path optimizer. It does not exhaustively search all possible routes or guarantee that the selected route is the shortest available route.
 
 ## Safe Navigation Failure
 
-If neither avoidance-side candidate provides a safe approach, the simulator enters a blocked-navigation state instead of selecting an unsafe target.
+If the planner cannot identify a locally safe route, the simulator enters a blocked-navigation state rather than knowingly selecting an unsafe waypoint.
 
 When navigation becomes blocked:
 
 * `navigation_blocked` becomes true.
-* No avoidance waypoint is activated.
+* No unsafe avoidance target is activated.
 * Vessel speed is set to zero.
-* The final destination remains unchanged.
-* Future simulation and mission-metric updates stop.
-* The status panel displays `NAVIGATION BLOCKED`.
+* The selected final destination remains visible.
+* Navigation and mission-metric updates stop.
+* The interface displays `NAVIGATION BLOCKED`.
+* Trail history continues to age and expire.
 
-The blocked state is distinct from a collision. The vessel stops before knowingly committing to either unsafe candidate.
+This state is distinct from collision. It represents safe failure before the controller intentionally commits to a route it has determined to be unsafe.
 
-Selecting a new destination clears the blocked state and begins a new mission from the vessel’s current position.
+A valid new destination clears the blocked state and starts a new mission.
 
-## Terminal States
+## Destination Validation
 
-The simulation has three terminal states:
+Mouse-selected destinations are converted to world coordinates and passed to `Simulation.set_destination()`.
 
-* Arrival
-* Collision
-* Navigation blocked
+Before the current mission is changed, the simulator checks whether the requested destination satisfies the configured obstacle-clearance rules. A destination inside an obstacle or within its prohibited clearance region is rejected.
 
-Once any terminal state becomes active, future motion and mission-metric updates stop.
+If a destination is invalid:
 
-The status panel prioritizes terminal and navigation states in this order:
+* `set_destination()` returns `False`.
+* The existing destination is preserved.
+* Current mission and terminal-state data are not reset.
+* No new route is planned.
 
-1. `COLLISION`
-2. `ARRIVED`
-3. `NAVIGATION BLOCKED`
-5. `NAVIGATING`
+If a destination is valid:
 
-All three terminal states can be cleared by selecting a new destination.
+* `set_destination()` accepts the coordinates.
+* Mission and terminal-state data are reset as required.
+* A new route-planning attempt begins.
 
-## Interactive Destination Selection
-
-Version 0.9 introduced interactive destination selection using the left mouse button.
-
-When a left-click event occurs, the application:
-
-1. Reads the cursor’s screen position.
-2. Converts that position from pixels to world coordinates.
-3. Passes the resulting coordinates to `Simulation.set_destination()`.
-4. Begins a fresh mission toward the selected location.
-
-This allows destinations to be changed during an active mission or after arrival, collision, or blocked navigation.
+Separating validation from state mutation prevents an unsafe click from destroying a valid mission.
 
 ## Screen-to-World Coordinate Conversion
 
-Pygame reports cursor positions in screen coordinates:
+Pygame reports mouse positions in screen coordinates:
 
 * The screen origin is at the upper-left corner.
 * Positive screen x points right.
@@ -214,7 +328,7 @@ Screen x is converted to world x using:
 
 ```text
 world x =
-    (screen x − window width / 2)
+    (screen x - window width / 2)
     / pixels per meter
 ```
 
@@ -222,96 +336,154 @@ Screen y is converted to world y using:
 
 ```text
 world y =
-    (window height / 2 − screen y)
+    (window height / 2 - screen y)
     / pixels per meter
 ```
 
-The reversed subtraction in the y conversion accounts for the opposite vertical-axis directions used by the simulation and Pygame.
+The reversed y subtraction accounts for the opposite vertical-axis directions. This operation is the inverse of the renderer's world-to-screen conversion.
 
-This operation is the inverse of the renderer’s world-to-screen coordinate conversion.
+The current default display uses a 1200-by-800-pixel window and a scale of 5 pixels per meter.
 
 ## Mission Reset Behavior
 
-`Simulation.set_destination()` begins a new mission without recreating the entire simulation or moving the vessel back to its original starting point.
+`Simulation.set_destination()` starts a new mission without recreating the environment or teleporting the vessel to its configured initial pose.
 
-When a new destination is selected:
+When a valid new destination is accepted:
 
-* The destination coordinates are replaced.
+* Destination coordinates are replaced.
 * `arrived` becomes false.
 * `collided` becomes false.
 * `navigation_blocked` becomes false.
-* The active avoidance waypoint is cleared.
+* Existing avoidance-route waypoints are cleared.
 * Vessel speed is restored to the configured initial operating speed.
-* The route trail is replaced with one point at the vessel’s current position.
 * Mission elapsed time is reset to zero.
 * Route distance is reset to zero.
 * Estimated fuel use is reset to zero.
-* The vessel’s position is preserved.
-* The vessel’s heading is preserved.
-* The obstacle collection is preserved.
+* Vessel position is preserved.
+* Vessel heading is preserved.
+* Obstacles are preserved.
+* Recent trail history is preserved by default.
 
-Preserving position and heading means the new mission begins from the vessel’s actual current pose. The normal turn-rate-limited controller then redirects the vessel toward the new destination.
+Preserving position and heading means the new mission begins from the vessel's actual current pose. The turn-rate-limited controller then redirects the vessel toward the new destination.
 
-This differs from a complete application restart, which would recreate the vessel at its configured initial position and heading.
+Restoring the initial operating speed is an intentional mission-control simplification. A more detailed model could instead accelerate from the vessel's terminal-state speed.
+
+## Complete Scenario Reset
+
+A full scenario reset differs from selecting a new destination.
+
+The complete reset can recreate or reposition simulation elements, so it always:
+
+* Clears the existing trail
+* Resets trail time to zero
+* Starts the trail at the reset vessel position
+* Clears route waypoints and terminal states
+* Resets mission metrics
+
+Trail clearing is unconditional during a complete scenario reset because preserving the old trail could draw a false line between unrelated vessel positions.
+
+## Rolling Route-Trail History
+
+Version 1.0 stores a rolling time history of sampled vessel positions.
+
+Trail position and recording time are stored in synchronized lists:
+
+* `trail_points[index]` contains an `(x, y)` world position.
+* `trail_point_times_s[index]` contains the simulated time at which that point was recorded.
+
+A new point is recorded only after the vessel moves at least the configured minimum spacing from the previous trail point. This avoids adding one point every rendered frame.
+
+At each simulation update:
+
+1. Trail time advances by the elapsed update time.
+2. Points older than the configured retention period are removed.
+3. A new position is recorded if the vessel has moved far enough.
+
+Trail expiration runs even when navigation or mission metrics have stopped because of arrival, collision, or blocked navigation.
+
+The current defaults are:
+
+```python
+TRAIL_RETENTION_TIME_S = 60.0
+RESET_TRAIL_ON_DESTINATION_CHANGE = False
+```
+
+With the default setting, selecting a new destination preserves recent vessel history. Setting `RESET_TRAIL_ON_DESTINATION_CHANGE` to `True` starts a new trail at every accepted destination change.
+
+A complete scenario reset always clears the trail regardless of this setting.
 
 ## Mission Metrics
 
-The simulation tracks:
+The simulator tracks:
 
 * Mission elapsed time
 * Actual route distance traveled
-* Estimated fuel used
+* Estimated cumulative fuel use
 * Current estimated fuel-burn rate
 
-Elapsed time accumulates during active simulation updates. Once the vessel arrives, collides, or becomes navigation blocked, future updates stop and the recorded mission metrics remain unchanged.
+Metrics accumulate only while the mission is active. Arrival, collision, or blocked navigation freezes the mission record.
 
-Selecting a new destination creates a fresh mission-metrics record with zero elapsed time, distance, and fuel use.
+Selecting a valid new destination creates a new `MissionMetrics` object with zero elapsed time, route distance, and fuel use. This reset is independent of trail preservation: the visual trail can span multiple missions even though the performance metrics describe only the current mission.
 
-Route distance is calculated after each movement update from the vessel’s previous and current positions:
+Route distance is integrated after movement from the vessel's previous and current positions:
 
 ```text
-distance traveled = √[(x₂ − x₁)² + (y₂ − y₁)²]
+distance traveled =
+    √[(x₂ - x₁)² + (y₂ - y₁)²]
 ```
 
-The calculated distance is added to the cumulative route distance. This measures the vessel’s actual simulated path, including turns and obstacle-avoidance detours, rather than only measuring the straight-line distance between the starting point and destination.
+Each movement interval is added to the cumulative route distance. The result measures the actual simulated path, including turns and avoidance detours, instead of only measuring straight-line distance to the destination.
 
 ## Fuel-Consumption Model
 
-The simulator uses a simplified cubic-speed model to estimate fuel consumption while the vessel is moving:
+The simulator uses a simplified cubic-speed model while the vessel is moving:
 
 ```text
-fuel burn rate = base fuel burn rate + speed coefficient × speed³
+fuel burn rate =
+    base fuel burn rate
+    + speed coefficient × speed³
 ```
-
-The cubic term approximates the general marine-engineering relationship in which the propulsion power required by a displacement vessel increases approximately with the cube of speed under comparable operating conditions.
 
 Fuel used during one update is:
 
 ```text
-fuel used = fuel burn rate × elapsed time / 3600
+fuel used =
+    fuel burn rate × elapsed time / 3600
 ```
 
-The division by 3,600 converts elapsed time from seconds to hours because the burn rate is measured in liters per hour.
+The division by 3,600 converts elapsed time from seconds to hours because burn rate is measured in liters per hour.
 
-When vessel speed is zero, the model returns a fuel-burn rate of zero. The configured base rate therefore represents an underway fuel-consumption component rather than engine idling or hotel loads.
+When vessel speed is zero, the model returns a zero burn rate. The configured base rate therefore represents an underway component rather than engine idling or hotel loads.
 
-Fuel consumption is accumulated using the vessel’s speed during each movement interval. At the current constant operating speed, the resulting mission estimate is proportional to total travel time.
+Because speed now changes during navigation, fuel burn varies throughout a mission. Lower maneuvering speeds reduce instantaneous estimated burn, and the accumulated estimate reflects the simulated speed history.
 
-The model is intended for simulation and comparison purposes. Its coefficients are not calibrated to a specific engine, hull, propeller, vessel displacement, sea condition, or measured fuel-consumption curve.
+The cubic relationship approximates the general increase in propulsion power with speed for a displacement vessel under comparable conditions. The coefficients are not calibrated to a specific engine, hull, propeller, displacement, loading condition, or sea state. The output is intended for relative comparison rather than real-vessel prediction.
+
+## Terminal and Navigation States
+
+The main displayed states are:
+
+* `NAVIGATING`
+* `AVOIDING`
+* `ARRIVED`
+* `COLLISION`
+* `NAVIGATION BLOCKED`
+
+Arrival, collision, and blocked navigation are terminal mission states. They stop motion and mission-metric accumulation. `NAVIGATING` and `AVOIDING` describe active guidance behavior.
+
+Terminal states can be cleared by selecting a valid new destination. Trail timestamps continue advancing in every state so old visual history can expire normally.
 
 ## Rendering
 
-The physics model stores position in meters. The renderer separately converts meters into pixels using a fixed display scale.
-
-Positive world y-coordinates point north, while Pygame screen y-coordinates increase downward. The renderer reverses the y-direction during conversion.
+The physics model stores positions in meters. The renderer converts them to pixels using the configured display scale and reverses the world y-axis for the Pygame display.
 
 The renderer displays:
 
-* The vessel
-* The selected final-destination marker
-* Multiple circular obstacles
-* A sampled route trail
-* The active avoidance waypoint
+* Oriented triangular vessel hull
+* Selected destination marker
+* Static circular obstacles
+* Rolling vessel trail
+* Planned or active avoidance waypoints
 * Current heading
 * Current speed
 * Distance remaining
@@ -319,69 +491,125 @@ The renderer displays:
 * Actual route distance
 * Estimated cumulative fuel use
 * Current estimated fuel-burn rate
-* Navigation, avoidance, arrival, collision, and blocked status
+* Navigation, avoidance, arrival, collision, and blocked-navigation status
 
-Trail points are stored only after the vessel moves a configured minimum distance from the previous point. This avoids storing a new trail point every frame.
-
-When a new destination is selected, the previous trail is cleared and a new trail begins at the vessel’s current position.
+Rendering is separated from simulation state so visual scale does not change the physical values used by navigation or mission calculations.
 
 ## Automated Validation
 
-The Version 0.9 test suite contains 58 automated tests covering:
+The Version 1.0 suite contains 88 automated tests.
+
+The suite covers:
 
 * Vessel motion
 * Frame-rate-independent updates
 * Maritime heading calculations
 * Shortest-direction turning
 * Turn-rate limiting
+* Guidance-speed calculation
+* Acceleration and deceleration limiting
 * Arrival behavior
 * Obstacle validation
-* Circular collision detection
-* Direct-route obstruction detection
+* Triangular-hull collision detection
+* Touching and immediately separated collision boundaries
+* Collision checks across obstacle collections
+* Finite-route obstruction detection
 * Nearest blocking-obstacle selection
 * Avoidance-waypoint calculations
-* End-to-end obstacle avoidance
-* Multiple aligned obstacles
-* Multiple staggered obstacles
 * Preferred-side and opposite-side selection
-* Safe stopping when both avoidance sides are blocked
-* Interactive mission-state resetting
-* Preservation of vessel position and heading during mission reset
-* Preservation of existing obstacles during mission reset
-* Restoration of vessel speed
-* Trail and mission-metric resetting
+* Safe stopping when avoidance candidates are blocked
+* Multiple aligned and staggered obstacles
+* End-to-end arrival without collision
+* Destination validation
+* Mission-state resetting
+* Vessel position and heading preservation across destination changes
+* Obstacle preservation across destination changes
+* Speed restoration for a new mission
 * Screen-to-world coordinate conversion
+* Trail recording and spacing
+* Configurable trail preservation and resetting
+* Time-based trail expiration
+* Unconditional trail clearing during full scenario reset
 * Mission elapsed time
 * Actual route distance
 * Fuel-burn calculations
 * Cumulative fuel use
 * Terminal-state metric freezing
 
+Run the full suite with:
+
+```bash
+python -m unittest discover -s tests
+```
+
+Expected result:
+
+```text
+Ran 88 tests
+OK
+```
+
+## Configuration Strategy
+
+Shared engineering and display settings are centralized in `config.py`. Current configuration categories include:
+
+* Initial vessel state
+* Vessel dimensions
+* Arrival tolerance
+* Turn-rate limit
+* Guidance-speed limits
+* Acceleration and deceleration limits
+* Obstacle generation and validation
+* Route-clearance geometry
+* Avoidance offsets and waypoint radii
+* Trail spacing and retention
+* Fuel-model coefficients
+* Window dimensions and display scale
+* Rendering colors and sizes
+
+Centralization makes experiments reproducible, reduces duplicated constants, and allows model behavior to be adjusted without rewriting navigation algorithms.
+
 ## Current Limitations
 
-* Constant operating speed during each active mission
-* Fixed maximum turn rate
-* Point-based vessel motion
-* Circular approximation of vessel collision geometry
-* Discrete collision checks
-* Static obstacles only
-* No acceleration or deceleration model
-* No wind, waves, or current
-* Fixed camera
-* Avoidance uses one temporary waypoint at a time
-* Preferred-side candidate is checked before the opposite side
-* No comparison of total route length between safe candidates
-* Candidate safety considers the approach to the temporary waypoint rather than planning the complete remaining route
-* No global path optimization
-* No support for moving obstacles
-* No guarantee of a valid route through tightly clustered obstacle fields
-* New destinations are not validated before the mission begins
-* A destination can be selected inside an obstacle or inside its required clearance area
-* Selecting a new destination after collision clears the collision state without repositioning the vessel
-* Mouse input is the only interactive mission control
-* Simplified cubic-speed fuel model
-* Fuel coefficients are not calibrated to a real vessel
-* No engine-efficiency or propeller-efficiency model
-* No engine transients, idle consumption, or auxiliary electrical loads
-* No fuel-tank capacity or fuel-depletion behavior
-* No effects from vessel loading, hull condition, water depth, or sea state
+* Kinematic rather than force-based vessel dynamics
+* No mass, inertia, thrust, drag, rudder, or propeller model
+* No reverse motion, sideslip, or lateral drift
+* Fixed maximum turn rate rather than speed-dependent turning behavior
+* Acceleration and deceleration limits are prescribed rather than derived from propulsion forces
+* Static circular obstacles only
+* No moving-vessel tracking or COLREGs behavior
+* No wind, waves, current, tide, or water-depth effects
+* Perfect knowledge of position, obstacles, and destination
+* No sensor range, noise, latency, uncertainty, or failure
+* Reactive local avoidance rather than global route optimization
+* No guarantee of finding a route through tightly clustered obstacles
+* Preferred-side ordering does not guarantee the shortest safe route
+* Conservative circular planning clearance can exceed exact triangular-hull requirements
+* Discrete rather than continuous collision detection
+* Fixed camera, simulation scale, and operating area
+* Mouse input is the only interactive destination control
+* Selecting a destination after collision clears the terminal state without physically separating the vessel from an obstacle
+* New missions restore configured speed rather than modeling restart acceleration from zero
+* Simplified and uncalibrated cubic-speed fuel model
+* No engine-efficiency, propeller-efficiency, battery, or fuel-tank model
+* No idle consumption, hotel loads, or auxiliary electrical demand
+* No loading, hull-condition, sea-state, or shallow-water corrections
+
+## Future Work
+
+Potential extensions include:
+
+* Wind, waves, and current disturbances
+* Force-based surge, sway, and yaw dynamics
+* Speed-dependent rudder response and turning radius
+* Moving vessels and COLREGs-aware avoidance
+* Simulated radar, AIS, GPS, and sensor uncertainty
+* Global path planning and route-length optimization
+* Continuous collision detection
+* Engine, propeller, battery, and endurance modeling
+* Mission-data export and post-mission plots
+* Adjustable camera controls and larger operating areas
+* Hardware-in-the-loop testing
+* Integration with a physical autonomous surface-vessel prototype
+
+These features are intentionally outside Version 1.0. The completed release is a focused, tested demonstration of autonomous navigation, local avoidance, simplified maneuverability, safe failure, and mission-performance tracking.
