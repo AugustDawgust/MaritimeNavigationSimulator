@@ -6,10 +6,147 @@ from navigation import (
     calculate_desired_heading,
     calculate_distance,
 )
+from unittest.mock import patch
 import config
 
 
 class TestSimulation(unittest.TestCase):
+    def test_destination_change_preserves_trail_by_default(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.trail_points = [
+            (0.0, 0.0),
+            (5.0, 0.0),
+        ]
+        simulation.trail_point_times_s = [
+            0.0,
+            1.0,
+        ]
+
+        with patch.object(
+                config,
+                "RESET_TRAIL_ON_DESTINATION_CHANGE",
+                False,
+        ):
+            simulation.set_destination(50.0, 20.0)
+
+        self.assertEqual(
+            simulation.trail_points,
+            [
+                (0.0, 0.0),
+                (5.0, 0.0),
+            ],
+        )
+        self.assertEqual(
+            simulation.trail_point_times_s,
+            [
+                0.0,
+                1.0,
+            ],
+        )
+
+    def test_destination_change_can_reset_trail(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.obstacles = []
+        simulation._trail_time_s = 10.0
+        simulation.trail_points = [
+            (-5.0, 0.0),
+            (0.0, 0.0),
+        ]
+        simulation.trail_point_times_s = [
+            5.0,
+            8.0,
+        ]
+
+        with patch.object(
+                config,
+                "RESET_TRAIL_ON_DESTINATION_CHANGE",
+                True,
+        ):
+            destination_was_set = simulation.set_destination(
+                50.0,
+                20.0,
+            )
+
+        self.assertTrue(destination_was_set)
+        self.assertEqual(
+            simulation.trail_points,
+            [
+                (
+                    simulation.vessel.x_m,
+                    simulation.vessel.y_m,
+                )
+            ],
+        )
+        self.assertEqual(
+            simulation.trail_point_times_s,
+            [10.0],
+        )
+
+    def test_trail_points_expire_after_retention_time(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation.arrived = True
+        simulation._trail_time_s = (
+            config.TRAIL_RETENTION_TIME_S
+        )
+        simulation.trail_points = [
+            (0.0, 0.0),
+            (1.0, 0.0),
+        ]
+        simulation.trail_point_times_s = [
+            0.0,
+            1.0,
+        ]
+
+        simulation.update(0.1)
+
+        self.assertEqual(
+            simulation.trail_points,
+            [(1.0, 0.0)],
+        )
+        self.assertEqual(
+            simulation.trail_point_times_s,
+            [1.0],
+        )
+
+    def test_scenario_reset_always_clears_trail(
+            self,
+    ) -> None:
+        simulation = Simulation()
+        simulation._trail_time_s = 30.0
+        simulation.trail_points = [
+            (-10.0, 0.0),
+            (0.0, 0.0),
+        ]
+        simulation.trail_point_times_s = [
+            20.0,
+            25.0,
+        ]
+
+        simulation.reset_scenario(seed=0)
+
+        self.assertEqual(
+            simulation._trail_time_s,
+            0.0,
+        )
+        self.assertEqual(
+            simulation.trail_points,
+            [
+                (
+                    simulation.vessel.x_m,
+                    simulation.vessel.y_m,
+                )
+            ],
+        )
+        self.assertEqual(
+            simulation.trail_point_times_s,
+            [0.0],
+        )
     def test_collision_stops_vessel(self) -> None:
         simulation = Simulation()
         simulation.obstacles = [
@@ -471,7 +608,10 @@ class TestSimulation(unittest.TestCase):
 
         self.assertEqual(
             simulation.trail_points,
-            [(12.0, 18.0)],
+            [
+                (0.0, 0.0),
+                (12.0, 18.0),
+            ],
         )
         self.assertEqual(
             simulation.metrics.elapsed_time_s,

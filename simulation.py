@@ -52,9 +52,10 @@ class Simulation:
         ]
         self.scenario_seed: int | None = None
 
-        self.trail_points = [
-            (self.vessel.x_m, self.vessel.y_m)
-        ]
+        self._trail_time_s = 0.0
+        self.trail_points: list[tuple[float, float]] = []
+        self.trail_point_times_s: list[float] = []
+        self._reset_trail()
 
     @property
     def distance_to_destination_m(self) -> float:
@@ -115,14 +116,14 @@ class Simulation:
         self.collided = False
         self.navigation_blocked = False
 
-        self.vessel.speed_mps = config.INITIAL_VESSEL_SPEED_MPS
+        self.vessel.speed_mps = (
+            config.INITIAL_VESSEL_SPEED_MPS
+        )
 
-        self.trail_points = [
-            (
-                self.vessel.x_m,
-                self.vessel.y_m,
-            )
-        ]
+        if config.RESET_TRAIL_ON_DESTINATION_CHANGE:
+            self._reset_trail()
+        elif not self.trail_points:
+            self._reset_trail()
 
         self.metrics = MissionMetrics(
             base_fuel_burn_rate_lph=(
@@ -132,6 +133,7 @@ class Simulation:
                 config.SPEED_CUBED_COEFFICIENT
             ),
         )
+
         self.route_waypoints = []
 
         return self.plan_route()
@@ -191,12 +193,8 @@ class Simulation:
         self.obstacles = new_obstacles
         self.scenario_seed = seed
 
-        self.trail_points = [
-            (
-                self.vessel.x_m,
-                self.vessel.y_m,
-            )
-        ]
+        self._trail_time_s = 0.0
+        self._reset_trail()
 
         self.metrics = MissionMetrics(
             base_fuel_burn_rate_lph=(
@@ -249,7 +247,76 @@ class Simulation:
 
             self.route_waypoints.pop(0)
 
+    def _reset_trail(self) -> None:
+        self.trail_points = [
+            (self.vessel.x_m, self.vessel.y_m)
+        ]
+        self.trail_point_times_s = [
+            self._trail_time_s
+        ]
+
+    def _record_trail_point(self) -> None:
+        if not self.trail_points:
+            self.trail_points.append(
+                (self.vessel.x_m, self.vessel.y_m)
+            )
+            self.trail_point_times_s.append(
+                self._trail_time_s
+            )
+            return
+
+        last_x_m, last_y_m = self.trail_points[-1]
+
+        distance_from_last_point_m = calculate_distance(
+            last_x_m,
+            last_y_m,
+            self.vessel.x_m,
+            self.vessel.y_m,
+        )
+
+        if (
+                distance_from_last_point_m
+                >= config.TRAIL_POINT_SPACING_M
+        ):
+            self.trail_points.append(
+                (self.vessel.x_m, self.vessel.y_m)
+            )
+            self.trail_point_times_s.append(
+                self._trail_time_s
+            )
+
+    def _expire_old_trail_points(self) -> None:
+        cutoff_time_s = (
+                self._trail_time_s
+                - config.TRAIL_RETENTION_TIME_S
+        )
+
+        first_retained_index = 0
+
+        while (
+                first_retained_index
+                < len(self.trail_point_times_s)
+                and self.trail_point_times_s[
+                    first_retained_index
+                ] < cutoff_time_s
+        ):
+            first_retained_index += 1
+
+        if first_retained_index == 0:
+            return
+
+        self.trail_points = self.trail_points[
+            first_retained_index:
+        ]
+        self.trail_point_times_s = (
+            self.trail_point_times_s[
+                first_retained_index:
+            ]
+        )
     def update(self, dt_s: float) -> None:
+        self._trail_time_s += dt_s
+        self._expire_old_trail_points()
+
         self._advance_reached_route_waypoints()
 
         if self.arrived or self.collided:
@@ -387,22 +454,7 @@ class Simulation:
             dt_s=dt_s,
         )
 
-        last_x_m, last_y_m = self.trail_points[-1]
-
-        distance_from_last_point = calculate_distance(
-            last_x_m,
-            last_y_m,
-            self.vessel.x_m,
-            self.vessel.y_m,
-        )
-
-        if (
-            distance_from_last_point
-            >= config.TRAIL_POINT_SPACING_M
-        ):
-            self.trail_points.append(
-                (self.vessel.x_m, self.vessel.y_m)
-            )
+        self._record_trail_point()
 
         if vessel_collides_with_any_obstacle(
             self.vessel,
