@@ -4,6 +4,11 @@ A Python engineering simulation of an autonomous surface vessel navigating throu
 
 The project demonstrates autonomous waypoint navigation, reactive collision avoidance, simplified vessel maneuvering, safe navigation failure, interactive mission control, and mission-performance tracking. It was developed incrementally as a portfolio project focused on maritime autonomy, simulation, and test-driven engineering.
 
+<p align="center">
+  <img src="Simulator_Demo_1.png" alt="Autonomous vessel navigation simulation" width="49%">
+  <img src="Simulator_Demo_2.png" alt="Autonomous vessel obstacle-avoidance simulation" width="49%">
+</p>
+
 ## Current Version: 1.0
 
 Version 1.0 includes:
